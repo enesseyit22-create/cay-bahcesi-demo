@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 
 // ---------- customer models (swap in Meshy rigged GLBs here; eyes = [x, y] of the eye centres in model space, metres) ----------
 const CUSTOMER_MODELS = [
@@ -301,7 +302,7 @@ const custBases = (await Promise.all(CUSTOMER_MODELS.map(m => loadG(m.url).then(
 
 // ---------- environment assets (Meshy, decimated): replace the primitive placeholders when they load ----------
 const ENV = Object.fromEntries(await Promise.all(['env_tree', 'env_railing', 'env_lamp', 'env_awning', 'env_bench', 'env_bar'].map(n => load(n).then(g => [n, g]))));
-const topFade = []; // materials made see-through in the overview camera so they don't hide the game
+const topFade = [], topHide = []; // materials made see-through in the overview camera so they don't hide the game
 // one InstancedMesh per sub-mesh: N copies cost one draw call each
 function instanceGLB(src, mats4, { shadow = true, block = false } = {}) {
   const out = []; src.updateMatrixWorld(true);
@@ -320,7 +321,26 @@ function countTris(o) { let n = 0; o.traverse(m => { if (m.isMesh) n += (m.geome
 if (ENV.env_tree) { // çınar: 8 m, slight random yaw; trunk blocks the camera, canopy fades in overview
   placeholders.trees.forEach(t => t.visible = false);
   instanceGLB(ENV.env_tree, VENUE.trees.map(([x, z, s], i) => TRS(x, 0, z, i * 2.1, s)), { block: true }).forEach(im => { im.material.transparent = true; topFade.push(im.material); });
-  envTris.tree = countTris(ENV.env_tree);
+  // leaf cards: alpha-cutout plane-tree leaf clusters scattered over the canopy surface, facing outward (one InstancedMesh for all trees)
+  const leafTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); const r = mulberry(11);
+    const leaf = (x, y, s, a, col) => { g.save(); g.translate(x, y); g.rotate(a); g.scale(s, s); g.fillStyle = col; g.beginPath();
+      for (let k = 0; k <= 10; k++) { const t = k / 10 * Math.PI * 2, lobe = 0.62 + 0.38 * Math.abs(Math.cos(t * 2.5)); g.lineTo(Math.sin(t) * 20 * lobe, -Math.cos(t) * 20 * lobe); }
+      g.closePath(); g.fill(); g.strokeStyle = 'rgba(20,40,10,.45)'; g.lineWidth = 1.2; g.beginPath(); for (const t of [-1.2, 0, 1.2]) { g.moveTo(0, 6); g.lineTo(Math.sin(t) * 16, -Math.cos(t) * 16); } g.stroke(); g.restore(); };
+    for (let i = 0; i < 70; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * 100; const L = 30 + r() * 26;
+      leaf(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 0.7 + r() * 0.6, r() * 6.28, `hsl(${88 + r() * 22},${38 + r() * 20}%,${L}%)`); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85, transparent: false });
+  const smp = new MeshSurfaceSampler(ENV.env_tree.getObjectByProperty('isMesh', true)).build();
+  const P_ = new THREE.Vector3(), N_ = new THREE.Vector3(), pts = [];
+  const tm = ENV.env_tree.getObjectByProperty('isMesh', true); ENV.env_tree.updateMatrixWorld(true);
+  for (let k = 0; pts.length < 950 && k < 20000; k++) { smp.sample(P_, N_); P_.applyMatrix4(tm.matrixWorld); N_.transformDirection(tm.matrixWorld); if (P_.y > 3.1 && N_.y > -0.6) pts.push([P_.clone(), N_.clone()]); }
+  const cards = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), leafMat, pts.length * VENUE.trees.length);
+  const rr = mulberry(5), q = new THREE.Quaternion(), qr = new THREE.Quaternion(), m4 = new THREE.Matrix4(), Z = new THREE.Vector3(0, 0, 1); let ci = 0;
+  VENUE.trees.forEach(([x, z, s], i) => { const Mt = TRS(x, 0, z, i * 2.1, s);
+    for (const [p, n] of pts) { q.setFromUnitVectors(Z, n); qr.setFromAxisAngle(Z, rr() * 6.28); q.multiply(qr);
+      const sz = 1.0 + rr() * 0.7; m4.compose(p.clone().addScaledVector(n, 0.12 + rr() * 0.18), q, new THREE.Vector3(sz, sz, sz)); cards.setMatrixAt(ci++, Mt.clone().multiply(m4)); } });
+  cards.castShadow = true; cards.receiveShadow = true; cards.computeBoundingSphere(); scene.add(cards); topHide.push(cards);
+  envTris.tree = countTris(ENV.env_tree) + pts.length * 2;
 }
 if (ENV.env_railing) { // 3.24 m x 1 m section, tiled along the waterfront
   placeholders.railing.forEach(r => r.visible = false);
@@ -680,6 +700,7 @@ addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 function cycleCam() { camMode = CAM_MODES[(CAM_MODES.indexOf(camMode) + 1) % 3]; applyCamMode(); }
 function applyCamMode() {
   for (const m of topFade) { m.opacity = camMode === 'top' ? 0.28 : 1; m.depthWrite = camMode !== 'top'; }
+  for (const o of topHide) o.visible = camMode !== 'top';
   document.getElementById('camBtn').textContent = CAM_LABEL[camMode];
   document.getElementById('joyHint').classList.toggle('hidden', camMode === 'top');
   document.getElementById('hint').textContent = camMode === 'top'
