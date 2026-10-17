@@ -25,9 +25,31 @@ html,body{margin:0;height:100%;overflow:hidden;background:#e9b98a;font-family:sy
 #startBtn:active{transform:translateY(3px);box-shadow:0 1px 0 #6e1410}
 #err{display:none;position:fixed;bottom:40px;left:6px;right:6px;background:rgba(150,0,0,.9);color:#fff;font:12px monospace;white-space:pre-wrap;padding:6px;z-index:20;max-height:30vh;overflow:auto}
 
-#camBtn{position:fixed;top:calc(env(safe-area-inset-top) + 58px);right:10px;z-index:7;background:rgba(179,38,30,.92);color:#fff;border:2px solid rgba(255,220,170,.6);border-radius:999px;font-size:16px;font-weight:700;padding:8px 14px;box-shadow:0 2px 8px rgba(0,0,0,.3);touch-action:manipulation}
+#camBtn{position:fixed;top:calc(env(safe-area-inset-top) + 58px);right:calc(env(safe-area-inset-right) + 10px);z-index:7;background:rgba(179,38,30,.92);color:#fff;border:2px solid rgba(255,220,170,.6);border-radius:999px;font-size:16px;font-weight:700;padding:8px 14px;box-shadow:0 2px 8px rgba(0,0,0,.3);touch-action:manipulation}
 #camBtn:active{transform:scale(.96)}
 #joyBase{position:fixed;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;background:rgba(255,240,220,.18);border:2px solid rgba(255,240,220,.55);pointer-events:none;z-index:6;display:none}
 #joyBase.active{display:block}
 #joyKnob{position:absolute;left:50%;top:50%;width:52px;height:52px;border-radius:50%;background:rgba(255,230,190,.8);box-shadow:0 2px 6px rgba(0,0,0,.35);transform:translate(-50%,-50%)}
 #joyHint{position:fixed;left:24px;bottom:calc(env(safe-area-inset-bottom) + 60px);width:84px;height:84px;border-radius:50%;border:2px dashed rgba(255,240,220,.6);color:#fff;font-size:30px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5;opacity:.7}
+
+#hud{left:calc(env(safe-area-inset-left) + 10px);right:calc(env(safe-area-inset-right) + 10px)}
+#trayHud{left:calc(env(safe-area-inset-left) + 10px)}
+#hint.fade{opacity:0;transition:opacity 1s}
+#joyHint{left:calc(env(safe-area-inset-left) + 28px)}
+#lookHint{position:fixed;right:calc(env(safe-area-inset-right) + 28px);bottom:calc(env(safe-area-inset-bottom) + 60px);color:#fff;font-size:15px;padding:10px 14px;border-radius:14px;border:2px dashed rgba(255,240,220,.6);pointer-events:none;z-index:5;opacity:.7}
+#rotate{position:fixed;inset:0;z-index:30;background:linear-gradient(#3a1a0a,#7a2e14);color:#fff3e0;display:none;align-items:center;justify-content:center;text-align:center;font-size:22px;padding:20px}
+#rotate.show{display:flex}
+#rotate span{font-size:15px;opacity:.85}
+#rotate .ph{font-size:64px;display:inline-block;animation:rot 1.8s ease-in-out infinite;margin-bottom:10px}
+@keyframes rot{0%,20%{transform:rotate(0)}50%,80%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
+@media (orientation:landscape) and (max-height:500px){
+  .pill{font-size:14px;padding:6px 11px}
+  #trayHud{top:calc(env(safe-area-inset-top) + 46px)}
+  #camBtn{top:calc(env(safe-area-inset-top) + 8px);right:auto;left:50%;transform:translateX(-50%);font-size:14px;padding:6px 12px}
+  #camBtn:active{transform:translateX(-50%) scale(.96)}
+  #hint{font-size:11px;bottom:calc(env(safe-area-inset-bottom) + 6px)}
+  .card{max-width:560px;padding:14px 18px;max-height:92vh;overflow:auto}
+  .card h1{font-size:30px}.card ul{font-size:13.5px;line-height:1.45;margin-bottom:8px}
+  #toast{top:18%;font-size:18px}
+  .bubble{font-size:18px}
+}
