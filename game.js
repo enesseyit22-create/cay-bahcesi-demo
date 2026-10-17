@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
 // ---------- customer models (swap in Meshy rigged GLBs here; eyes = [x, y] of the eye centres in model space, metres) ----------
 const CUSTOMER_MODELS = [
@@ -41,13 +42,22 @@ const scene = new THREE.Scene();
   g.fillStyle = gr; g.fillRect(0, 0, 2, 256);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; scene.background = t;
 }
-scene.fog = new THREE.Fog(0xf0b88a, 40, 110);
+scene.fog = new THREE.Fog(0xc9aa98, 70, 300);
 
-const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 200);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 400);
+const SKY_ROT = -3.445; // turns the HDRI so its sun sits where SUN_DIR is
+{
+  const bg = new THREE.TextureLoader().load('./assets/tex/sky_belfast_sunset.jpg', t => { t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; scene.background = t; });
+  scene.backgroundRotation = new THREE.Euler(0, SKY_ROT, 0); scene.environmentRotation = new THREE.Euler(0, SKY_ROT, 0);
+  new RGBELoader().load('./assets/tex/sky_belfast_sunset_1k.hdr', hdr => {
+    const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromEquirectangular(hdr).texture; hdr.dispose(); pm.dispose();
+    scene.environmentIntensity = 0.55; hemi.intensity = 0.55;
+  });
+}
 
 // lights: warm low afternoon sun from the west/south-west
 const hemi = new THREE.HemisphereLight(0xb9d0ee, 0x8f6a48, 1.25); scene.add(hemi);
-const SUN_DIR = new THREE.Vector3(-13, 8.5, -11).normalize(); // golden hour: low sun over the Bosphorus, shadows fall towards the garden
+const SUN_DIR = new THREE.Vector3(-13, 6.2, -11).normalize(); // golden hour: low sun over the Bosphorus, shadows fall towards the garden
 const sun = new THREE.DirectionalLight(0xffc28a, 3.1);
 sun.position.copy(SUN_DIR).multiplyScalar(18); sun.castShadow = true;
 sun.shadow.mapSize.setScalar(QUALITY[SETTINGS.quality].shadow);
@@ -64,7 +74,7 @@ const SAMOVAR_SERVE = new THREE.Vector3(-4.72, 0, 1.75); // waiter stands ~0.33 
 // ---------- venues: each venue is a self-contained scene config (menu "MEKANLAR" lists them) ----------
 const VENUES = [
   { id: 'bogaz', name: 'Boğaz Çay Bahçesi', desc: 'İstanbul, Boğaz kıyısı', level: 1,
-    trees: [[-6.6, -4.8, 1.0], [6.7, -4.6, 0.95], [7.4, 2.8, 0.85]],           // çınar x, z, scale
+    trees: [[-6.6, -4.8, 1.0], [6.7, -4.6, 0.95], [7.4, 2.8, 0.85], [-12.5, 9.0, 0.55], [13.5, 9.0, 0.6]], // çınar x, z, scale (last two: sidewalk trees)
     lamps: [[-7.15, -1.6], [7.15, -1.9], [-7.15, 4.9], [7.15, 3.6]],            // street lamps along the side paths
     benches: [[-4.6, 6.85, Math.PI], [1.0, 6.85, Math.PI]],                     // x, z, yaw
     pots: [-4.4, -0.9, 2.7, 5.4],                                                // geranium pots along the railing
@@ -123,8 +133,35 @@ const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness
   const edge = new THREE.Mesh(new THREE.BoxGeometry(W, 1.2, 0.5), std(0xa89a86));
   edge.position.set(0, -0.6, SEA_EDGE_Z + 0.2); scene.add(edge);
   // surrounding pavement beyond garden so camera never sees void
-  const outer = new THREE.Mesh(new THREE.PlaneGeometry(60, 30), std(0x9b8a74));
-  outer.rotation.x = -Math.PI / 2; outer.position.set(0, -0.02, SEA_EDGE_Z + 15); outer.receiveShadow = true; scene.add(outer);
+  // waterfront promenade + street around the garden: granite quay, paved promenade, curb, asphalt road, far sidewalk, apartment facades
+  const tl = new THREE.TextureLoader(), T = (f, rx, ry, srgb) => { const t = tl.load('./assets/tex/' + f); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 4; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+  const promMat = std(0xc9c3bb, { map: T('paving_Color.jpg', 120 / 2.6, 16 / 2.6, true), normalMap: T('paving_NormalGL.jpg', 120 / 2.6, 16 / 2.6), roughness: 0.95 });
+  const prom = new THREE.Mesh(new THREE.PlaneGeometry(120, 16), promMat); prom.rotation.x = -Math.PI / 2; prom.position.set(0, -0.03, SEA_EDGE_Z + 8); prom.receiveShadow = true; scene.add(prom);
+  const quay = new THREE.Mesh(new THREE.BoxGeometry(120, 1.25, 0.6), std(0x8f877d, { roughness: 0.9, normalMap: T('paving_NormalGL.jpg', 40, 0.5) })); quay.position.set(0, -0.6, SEA_EDGE_Z + 0.2); quay.receiveShadow = true; scene.add(quay);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(120, 0.12, 0.75), std(0xb3aa9e, { roughness: 0.8 })); cap.position.set(0, 0.0, SEA_EDGE_Z + 0.25); cap.receiveShadow = true; scene.add(cap);
+  const curbMat = std(0xa59e94, { roughness: 0.85 });
+  for (const z of [SEA_EDGE_Z + 16, SEA_EDGE_Z + 23.2]) { const c = new THREE.Mesh(new THREE.BoxGeometry(120, 0.16, 0.3), curbMat); c.position.set(0, 0.0, z); c.receiveShadow = true; scene.add(c); }
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(120, 7), std(0x3a3a3d, { roughness: 0.92 })); road.rotation.x = -Math.PI / 2; road.position.set(0, -0.08, SEA_EDGE_Z + 19.6); road.receiveShadow = true; scene.add(road);
+  const dash = new THREE.InstancedMesh(new THREE.PlaneGeometry(2.2, 0.14), new THREE.MeshStandardMaterial({ color: 0xe8e2d0, roughness: 0.7 }), 30);
+  for (let i = 0; i < 30; i++) dash.setMatrixAt(i, new THREE.Matrix4().makeRotationX(-Math.PI / 2).setPosition(-58 + i * 4, -0.07, SEA_EDGE_Z + 19.6)); scene.add(dash);
+  const side2 = new THREE.Mesh(new THREE.PlaneGeometry(120, 4), promMat); side2.rotation.x = -Math.PI / 2; side2.position.set(0, -0.03, SEA_EDGE_Z + 25.2); scene.add(side2);
+  { // apartment facades across the street
+    const c = document.createElement('canvas'); c.width = 128; c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 128, 256);
+    for (let fy = 0; fy < 6; fy++) for (let fx = 0; fx < 4; fx++) { g.fillStyle = '#3b4652'; g.fillRect(10 + fx * 29, 14 + fy * 40, 18, 24); g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(8 + fx * 29, 38 + fy * 40, 22, 3); }
+    g.fillStyle = '#5a3a2a'; g.fillRect(0, 236, 128, 20);
+    const ft = new THREE.CanvasTexture(c); ft.colorSpace = THREE.SRGBColorSpace;
+    const bm = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ map: ft, roughness: 0.8 }), 16); const r = mulberry(77), col = new THREE.Color();
+    const bpal = [0xe9dcc4, 0xd8a787, 0xf0e6d6, 0xc99a7a, 0xe1c79c, 0xbfb3a3, 0xd6c2a8];
+    for (let i = 0; i < 16; i++) { const w = 6 + r() * 3, h = 11 + r() * 9; bm.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(-56 + i * 7.4, h / 2 - 0.05, SEA_EDGE_Z + 30.5), new THREE.Quaternion(), new THREE.Vector3(w, h, 8))); bm.setColorAt(i, col.setHex(bpal[i % bpal.length])); }
+    bm.castShadow = false; bm.receiveShadow = true; scene.add(bm);
+  }
+  { // cheap railing continuing along the promenade outside the garden
+    const mat = std(0x1d2522, { roughness: 0.5, metalness: 0.5 }), xs = [];
+    for (let x = -60; x <= 60; x += 1.2) if (Math.abs(x) > 8.3) xs.push(x);
+    const post = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.05, 1.0, 5), mat, xs.length);
+    xs.forEach((x, i) => post.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, 0.5, SEA_EDGE_Z + 0.25))); scene.add(post);
+    for (const sx of [-1, 1]) for (const y of [0.98, 0.5]) { const r = new THREE.Mesh(new THREE.BoxGeometry(51.7, y > 0.9 ? 0.06 : 0.035, 0.06), mat); r.position.set(sx * 34.15, y, SEA_EDGE_Z + 0.25); scene.add(r); }
+  }
   // low hedge walls at sides and back
   const hedgeMat = std(0x3f6b2f, { roughness: 1, flatShading: true });
   for (const [x, z, w, d] of [[-7.8, 0.6, 0.6, 13.2], [7.8, -0.9, 0.6, 10.2], [0, 7.3, 16.2, 0.6]]) {
@@ -144,11 +181,11 @@ const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness
   }
 }
 // sea (animated shader)
-const seaUniforms = { uTime: { value: 0 }, uFog: { value: new THREE.Color(0xf0b88a) }, uSun: { value: SUN_DIR.clone() },
-  uNormal: { value: null }, uSkyTop: { value: new THREE.Color(0x4f7fb4) }, uSkyHor: { value: new THREE.Color(0x9db2c4) } };
+const seaUniforms = { uTime: { value: 0 }, uFog: { value: new THREE.Color(0xc4a698) }, uSun: { value: SUN_DIR.clone() },
+  uNormal: { value: null }, uSkyTop: { value: new THREE.Color(0x7e86a8) }, uSkyHor: { value: new THREE.Color(0xc9b2ad) } };
 {
   const wn = new THREE.TextureLoader().load('./assets/tex/waternormals.jpg'); wn.wrapS = wn.wrapT = THREE.RepeatWrapping; seaUniforms.uNormal.value = wn;
-  const geo = new THREE.PlaneGeometry(200, 90, 80, 36);
+  const geo = new THREE.PlaneGeometry(520, 160, 110, 40);
   const mat = new THREE.ShaderMaterial({
     uniforms: seaUniforms,
     vertexShader: `uniform float uTime; varying vec3 vW; varying float vH;
@@ -167,45 +204,65 @@ const seaUniforms = { uTime: { value: 0 }, uFog: { value: new THREE.Color(0xf0b8
         float fres = 0.02 + 0.98*pow(1.-max(dot(n,V),0.), 5.);
         vec3 Rf = reflect(-V, n);
         vec3 sky = mix(uSkyHor, uSkyTop, smoothstep(0.0, 0.45, Rf.y));
-        float d = clamp((-vW.z-6.)/55.,0.,1.);
-        vec3 deep = vec3(0.035,0.17,0.26), shallow = vec3(0.07,0.31,0.36);
+        float d = clamp((-vW.z-6.)/70.,0.,1.);
+        vec3 deep = mix(vec3(0.03,0.13,0.22), vec3(0.02,0.08,0.15), smoothstep(0.4,1.,d)), shallow = vec3(0.06,0.27,0.31);
         vec3 water = mix(shallow, deep, d) * (0.75 + 0.5*max(dot(n, uSun), 0.));
         water += vec3(0.05,0.12,0.1)*smoothstep(0.03,0.12,vH); // light through crests
         vec3 col = mix(water, sky, clamp(fres*0.85, 0., 0.62));
         col += vec3(0.25,0.12,0.03)*pow(max(dot(normalize(vec3(Rf.x,0.,Rf.z)), normalize(vec3(uSun.x,0.,uSun.z))),0.),6.)*fres; // warm sky glow toward the sun
         float spec = pow(max(dot(Rf, uSun), 0.), 380.)*7. + pow(max(dot(Rf, uSun), 0.), 40.)*0.25;
         col += vec3(1.,0.8,0.55)*spec;
-        float f = smoothstep(35.,105.,dist);
-        gl_FragColor = vec4(mix(col,uFog,f*0.8),1.);
+        float f = smoothstep(40.,150.,dist);
+        gl_FragColor = vec4(mix(col,uFog,f*0.75),1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`
   });
-  const sea = new THREE.Mesh(geo, mat); sea.rotation.x = -Math.PI / 2; sea.position.set(0, -0.55, SEA_EDGE_Z - 45); scene.add(sea);
+  const sea = new THREE.Mesh(geo, mat); sea.rotation.x = -Math.PI / 2; sea.position.set(0, -0.55, SEA_EDGE_Z - 80); scene.add(sea);
 }
-// far shore (Asian side silhouette): hills, houses, mosque + minarets
+// far shore (Asian side): three painted silhouette layers (hills, houses, domes, minarets) with atmospheric haze + Bosphorus Bridge
 {
-  const rnd = mulberry(42);
-  const hillMat = std(0x6f7f5e, { flatShading: true, roughness: 1 });
-  for (let i = 0; i < 9; i++) {
-    const h = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), hillMat);
-    h.scale.set(10 + rnd() * 8, 3 + rnd() * 4, 6); h.position.set(-60 + i * 15, -0.5, -72 - rnd() * 6); scene.add(h);
+  const layer = (seed, w, h, col, haze, opts) => { // canvas silhouette strip
+    const c = document.createElement('canvas'); c.width = 2048; c.height = 256; const g = c.getContext('2d'); const r = mulberry(seed);
+    const hill = (x) => opts.hill * (0.55 + 0.25 * Math.sin(x * 0.004 + seed) + 0.2 * Math.sin(x * 0.011 + seed * 2));
+    g.fillStyle = col; g.beginPath(); g.moveTo(0, 256);
+    for (let x = 0; x <= 2048; x += 16) g.lineTo(x, 256 - hill(x)); g.lineTo(2048, 256); g.fill();
+    for (let i = 0; i < opts.houses; i++) { // houses along the slope, lighter facades with dark windows
+      const x = r() * 2048, base = 256 - hill(x) * (0.15 + r() * 0.85), hw = 6 + r() * 14, hh = 5 + r() * 12;
+      g.fillStyle = opts.pal[i % opts.pal.length]; g.fillRect(x, base - hh, hw, hh + 3);
+      g.fillStyle = 'rgba(80,40,30,.55)'; g.fillRect(x - 1, base - hh - 3, hw + 2, 3);
+    }
+    for (const m of opts.mosques || []) { // dome + 2/4 minarets
+      const x = m * 2048, base = 256 - hill(x) * 0.5; g.fillStyle = opts.stone;
+      g.fillRect(x - 26, base - 22, 52, 22); g.beginPath(); g.arc(x, base - 22, 20, Math.PI, 0); g.fill();
+      for (const dx of [-34, 34, -48, 48].slice(0, opts.minarets || 2)) { g.fillRect(x + dx - 2, base - 70, 4, 70); g.beginPath(); g.moveTo(x + dx - 3, base - 70); g.lineTo(x + dx, base - 82); g.lineTo(x + dx + 3, base - 70); g.fill(); }
+    }
+    for (let i = 0; i < opts.trees; i++) { const x = r() * 2048, b = 256 - hill(x) * r(); g.fillStyle = opts.tree; g.beginPath(); g.arc(x, b, 3 + r() * 5, 0, 7); g.fill(); }
+    g.globalCompositeOperation = 'source-atop'; g.fillStyle = haze; g.fillRect(0, 0, 2048, 256); // haze tint
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    return new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.02, fog: false, depthWrite: false });
+  };
+  const pal = ['#efe2cc', '#d9a07a', '#f3ebdc', '#c98462', '#e6c48f', '#cbbfae'];
+  const L = [
+    { z: -150, w: 520, h: 52, y: -2, mat: layer(3, 520, 52, '#7d7f8f', 'rgba(190,175,180,.62)', { hill: 210, houses: 60, pal, stone: '#cfc6c0', trees: 0, tree: '#666', mosques: [0.18, 0.71], minarets: 4 }) },
+    { z: -112, w: 380, h: 34, y: -1.5, mat: layer(7, 380, 34, '#5f7058', 'rgba(185,160,150,.42)', { hill: 170, houses: 260, pal, stone: '#e2d9cc', trees: 120, tree: '#4c5e45', mosques: [0.43, 0.86], minarets: 2 }) },
+    { z: -80, w: 260, h: 18, y: -1.0, mat: layer(13, 260, 18, '#566a4b', 'rgba(200,160,130,.22)', { hill: 120, houses: 330, pal, stone: '#ebe3d6', trees: 160, tree: '#3f5537', mosques: [0.58], minarets: 2 }) },
+  ];
+  for (const l of L) { const m = new THREE.Mesh(new THREE.PlaneGeometry(l.w, l.h), l.mat); m.position.set(0, l.y + l.h / 2, l.z); m.renderOrder = -1; scene.add(m); }
+  // Bosphorus (15 Temmuz Şehitler) Bridge, far left: towers, deck, catenary cables and hangers, hazed
+  const hz = new THREE.MeshBasicMaterial({ color: 0x9c929a, fog: false }), br = new THREE.Group();
+  const span = 110, tower = 24;
+  for (const x of [-span / 2, span / 2]) { for (const z of [-1.2, 1.2]) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.9, tower, 0.9), hz); t.position.set(x, tower / 2, z); br.add(t); }
+    const cb = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 3.2), hz); cb.position.set(x, tower - 2, 0); br.add(cb); }
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(span + 70, 1.0, 3.2), hz); deck.position.y = 8; br.add(deck);
+  const cpts = []; for (let i = 0; i <= 40; i++) { const x = -span / 2 + span * i / 40; cpts.push(new THREE.Vector3(x, 9 + (tower - 9.5) * Math.pow((2 * x / span), 2), 0)); }
+  for (const z of [-1.3, 1.3]) {
+    const cable = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cpts.map(p => p.clone().setZ(z))), 40, 0.12, 3), hz); br.add(cable);
+    for (const sx of [-1, 1]) { const back = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(new THREE.Vector3(sx * span / 2, tower - 0.5, z), new THREE.Vector3(sx * (span / 2 + 34), 8.5, z)), 1, 0.12, 3), hz); br.add(back); }
   }
-  const houses = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), std(0xffffff), 70);
-  const m = new THREE.Matrix4(), col = new THREE.Color(); const pal = [0xe8d6b5, 0xd99a77, 0xf1e6d2, 0xc97f5d, 0xe2c08d, 0xbfb6a8];
-  for (let i = 0; i < 70; i++) {
-    const w = 1.2 + rnd() * 1.6, hh = 1 + rnd() * 2.6;
-    m.compose(new THREE.Vector3(-55 + rnd() * 110, hh / 2 - 0.4 + rnd() * 1.5, -64 - rnd() * 6), new THREE.Quaternion(), new THREE.Vector3(w, hh, 1.2));
-    houses.setMatrixAt(i, m); houses.setColorAt(i, col.setHex(pal[i % pal.length]));
-  }
-  scene.add(houses);
-  const stone = std(0xd9d2c4);
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), stone); dome.position.set(14, 2.4, -63); scene.add(dome);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(5, 2.6, 4), stone); base.position.set(14, 1.1, -63); scene.add(base);
-  for (const x of [10.5, 17.5]) {
-    const mi = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 9, 8), stone); mi.position.set(x, 4.3, -63); scene.add(mi);
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.4, 8), std(0x7a8a99)); cone.position.set(x, 9.5, -63); scene.add(cone);
-  }
+  const hv = []; for (let i = 1; i < 40; i++) { const p = cpts[i]; for (const z of [-1.3, 1.3]) hv.push(p.x, p.y, z, p.x, 8.5, z); }
+  const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(hv, 3)); br.add(new THREE.LineSegments(hg, new THREE.LineBasicMaterial({ color: 0xa69ca3, fog: false })));
+  br.position.set(-95, -0.5, -128); br.rotation.y = 0.32; scene.add(br);
 }
 // ferry (vapur): white two-deck Bosphorus ferry, black hull, yellow funnel with black top, windows, mast + flag, wake
 const ferry = new THREE.Group();
