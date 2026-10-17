@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+// ---------- customer models (swap in Meshy rigged GLBs here; eyes = [x, y] of the eye centres in model space, metres) ----------
+const CUSTOMER_MODELS = [
+  { url: 'cust_young', label: 'genç', scale: [0.93, 1.03], eyes: [[-0.035, 1.764], [0.035, 1.764]], skin: 0xc28c72, clothBelowY: 1.6, fez: 0.3 },
+  { url: 'cust_old', label: 'yaşlı', scale: [0.93, 1.0], eyes: [[-0.0425, 1.7675], [0.045, 1.7675]], skin: 0xb58068, clothBelowY: 1.6, fez: 0 },
+];
+const CLOTH_TINTS = [0x5b8fd9, 0xd9534f, 0x6fbf73, 0xe0b44a, 0x9b6fd1, 0x4fb8b0, 0xe58a4e, 0xcfcfcf, 0x8d6e63];
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('c');
@@ -39,7 +47,7 @@ const GARDEN = { minX: -6.6, maxX: 6.6, minZ: -5.6, maxZ: 6.4 };
 const SEA_EDGE_Z = -6.2;
 const ENTRANCE = new THREE.Vector3(7.6, 0, 5.4);
 const SAMOVAR_POS = new THREE.Vector3(-5.6, 0, 1.6);   // counter centre
-const SAMOVAR_SERVE = new THREE.Vector3(-4.55, 0, 1.6); // where waiter stands
+const SAMOVAR_SERVE = new THREE.Vector3(-4.72, 0, 1.75); // waiter stands ~0.33 m from the counter edge, opposite the owner
 const TABLE_POS = [[-2.6, -3.7], [0.9, -4.0], [4.3, -3.5], [-1.6, -0.3], [2.4, 0.1], [0.4, 3.4]];
 
 // ---------- procedural textures ----------
@@ -210,6 +218,7 @@ const [waiterG, ownerG, tableSrc, samovarSrc, traySrc, teapotSrc, easelSrc, chai
   loadG('waiter_anim').then(g => g || loadG('waiter')), loadG('owner_anim').then(g => g || loadG('owner')),
   ...['table', 'samovar', 'tray', 'teapot', 'easel', 'chair'].map(load)]);
 const waiterSrc = waiterG && waiterG.scene, ownerSrc = ownerG && ownerG.scene;
+const custBases = (await Promise.all(CUSTOMER_MODELS.map(m => loadG(m.url).then(g => g && { ...m, gltf: g })))).filter(Boolean);
 
 // ---------- props ----------
 const checker = checkerTexture();
@@ -318,23 +327,28 @@ const waiterAnim = new Animator(waiterSrc || waiter.inner, waiterG && waiterG.an
 const handBone = waiterSrc && (waiterSrc.getObjectByName('handR') || waiterSrc.getObjectByName('hand.R'));
 const handTray = trayModel.clone(); handTray.visible = false; scene.add(handTray);
 const _hp = new THREE.Vector3(), _hq = new THREE.Vector3();
+function palm(bone, out) { bone.getWorldPosition(out); const tip = bone.children[0]; if (tip) { tip.getWorldPosition(_hq); out.lerp(_hq, 0.5); } return out; }
+const _ho = new THREE.Vector3();
 function placeHandTray() {
   if (handBone && waiterAnim.ok) {
-    handBone.getWorldPosition(_hp);
     // palm is ~8cm along the hand bone; tray stays level and turns with the waiter
-    const tip = handBone.children[0]; if (tip) { tip.getWorldPosition(_hq); _hp.lerp(_hq, 0.5); }
+    palm(handBone, _hp);
+    if (W.trayHolder === 'owner' && ownerHand) { palm(ownerHand, _hp); }
+    else if (W.trayHolder === 'transfer' && ownerHand) { palm(ownerHand, _ho); _hp.lerpVectors(_ho, palm(handBone, _hp).clone(), W.transferK || 0); }
     handTray.position.set(_hp.x, _hp.y - 0.02, _hp.z);
   } else {
     const o = waiter.outer; _hp.set(0.12, 1.08 + waiter.inner.position.y, 0.3).applyAxisAngle(new THREE.Vector3(0, 1, 0), o.rotation.y).add(o.position); handTray.position.copy(_hp);
   }
-  handTray.rotation.y = waiter.outer.rotation.y;
+  handTray.rotation.y = W.trayHolder === 'owner' ? owner.outer.rotation.y : waiter.outer.rotation.y;
 }
 function waiterModelVisible(v) { waiter.inner.children.forEach(ch => { if (ch !== handTray) ch.visible = v; }); }
 const W = { pos: waiter.outer.position, target: null, action: null, speed: 2.0, yaw: 0, walkT: 0, moving: false, tray: 0, busy: 0, lock: 0, curSpeed: 0, pending: null };
 // owner NPC behind counter
 const owner = wrapModel(ownerSrc, 0x555555);
 const ownerAnim = new Animator(ownerSrc || owner.inner, ownerG && ownerG.animations);
-owner.outer.position.set(SAMOVAR_POS.x - 0.95, 0, SAMOVAR_POS.z + 0.15); owner.outer.rotation.y = Math.PI / 2;
+owner.outer.position.set(SAMOVAR_POS.x - 0.68, 0, SAMOVAR_POS.z + 0.15); owner.outer.rotation.y = Math.PI / 2;
+const ownerHand = ownerSrc && ownerSrc.getObjectByName('handR');
+const handBoneL = waiterSrc && waiterSrc.getObjectByName('handL');
 
 // ---------- customers (low-poly placeholder people) ----------
 const SKIN = [0xe6b996, 0xd9a47c, 0xc68a62, 0xf0c8a8];
@@ -375,6 +389,57 @@ function makePerson(rnd) {
 
 const customers = [];
 let rng = mulberry(Date.now() & 0xffff);
+// precompute eyelid anchor points (relative to the head bone) for each customer model, by raycasting the face in bind pose
+const _ray2 = new THREE.Raycaster();
+for (const b of custBases) {
+  const root = b.gltf.scene; root.updateMatrixWorld(true);
+  const head = root.getObjectByName('head'); b.lids = [];
+  const meshes = []; root.traverse(o => { if (o.isMesh) meshes.push(o); });
+  if (!head) continue;
+  const hq = head.getWorldQuaternion(new THREE.Quaternion()).invert();
+  for (const [ex, ey] of b.eyes) {
+    _ray2.set(new THREE.Vector3(ex, ey, 0.6), new THREE.Vector3(0, 0, -1));
+    const hit = _ray2.intersectObjects(meshes, false)[0];
+    const p = hit ? hit.point.clone() : new THREE.Vector3(ex, ey, 0.1); p.z += 0.003;
+    b.lids.push({ local: head.worldToLocal(p), quat: hq.clone() });
+  }
+  b.fezAt = head.worldToLocal(new THREE.Vector3(0, 1.86, -0.005)); b.fezQuat = hq.clone();
+}
+const lidGeo = new THREE.SphereGeometry(0.0165, 12, 8); lidGeo.scale(1.35, 0.85, 0.5);
+function tintCloth(mat, tint, belowY) {
+  // tint only desaturated clothing pixels below the neck (keeps skin, face, eyes and hair natural)
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTint = { value: new THREE.Color(tint) }; sh.uniforms.uBelow = { value: belowY };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vMY;').replace('#include <skinning_vertex>', '#include <skinning_vertex>\nvMY = position.y;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uTint; uniform float uBelow; varying float vMY;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        { vec3 c = diffuseColor.rgb; float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
+          float sat = (mx - mn) / (mx + 1e-3); float lum = dot(c, vec3(0.299, 0.587, 0.114));
+          float m = (1.0 - smoothstep(0.16, 0.32, sat)) * (1.0 - smoothstep(uBelow - 0.04, uBelow, vMY));
+          vec3 t = c * uTint * 1.25 + uTint * 0.06 * (1.0 - lum);
+          diffuseColor.rgb = mix(c, t, m); }`);
+  };
+  mat.customProgramCacheKey = () => 'tint' + tint + '_' + belowY;
+}
+function makeRiggedCustomer(rnd) {
+  const b = custBases[Math.floor(rnd() * custBases.length)];
+  const model = SkeletonUtils.clone(b.gltf.scene);
+  const tint = CLOTH_TINTS[Math.floor(rnd() * CLOTH_TINTS.length)];
+  model.traverse(o => {
+    if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; o.material = o.material.clone(); tintCloth(o.material, tint, b.clothBelowY); }
+  });
+  const g = new THREE.Group(); g.add(model);
+  g.scale.setScalar(THREE.MathUtils.lerp(b.scale[0], b.scale[1], rnd()));
+  const head = model.getObjectByName('head');
+  const lidMat = new THREE.MeshStandardMaterial({ color: b.skin, roughness: 0.75 });
+  const lids = (b.lids || []).map(l => { const m = new THREE.Mesh(lidGeo, lidMat); m.position.copy(l.local); m.quaternion.copy(l.quat); m.visible = false; head && head.add(m); return m; });
+  if (head && rnd() < b.fez) { const f = new THREE.Mesh(sharedGeo.fez, std(0xa3191a)); f.position.copy(b.fezAt); f.quaternion.copy(b.fezQuat); f.castShadow = true; head.add(f); }
+  // cheap camera blocker so the follow camera never passes through people
+  const col = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.5), new THREE.MeshBasicMaterial({ visible: false })); col.position.y = 0.7; col.userData.camBlock = true; g.add(col);
+  scene.add(g);
+  return { group: g, rig: true, anim: new Animator(model, b.gltf.animations), headBone: head, lids, blinkT: 1 + rnd() * 4, collider: col, headYaw: 0, headPitch: 0, model: b.label };
+}
+function makeCustomerBody(rnd) { return custBases.length ? makeRiggedCustomer(rnd) : { ...makePerson(rnd), rig: false }; }
 const CHAT_LINES = [
   'Hava ne güzel bugün', 'Maçı izledin mi?', 'Bu çayın tadı harika', 'Torunum üniversiteyi kazandı!', 'Şu vapura bak',
   'Boğaz bugün çok sakin', 'Akşama balık mı yesek?', 'Martılar yine coştu', 'Emekli maaşı yatmış mı?', 'Kadıköy\'e geçecek misin?',
@@ -393,7 +458,7 @@ function spawnCustomer(forcePair) {
   const party = { table: t, members: [], need: seatIdx.length, served: 0, state: 'arriving', patience: 0,
     maxPatience: Math.max(14, 26 - stats.served * 0.4) * (pair ? 1.3 : 1), drinkT: 0, bubble: null, chatT: 1.5 + rng() * 2, speaker: 0, said: new Set() };
   seatIdx.forEach((si, n) => {
-    const seat = t.seats[si]; const p = makePerson(rng);
+    const seat = t.seats[si]; const p = makeCustomerBody(rng); if (p.collider) camColliders.push(p.collider);
     p.group.position.copy(ENTRANCE).add(new THREE.Vector3(n * 0.7, 0, n * 0.35));
     const c = { ...p, party, table: t, seat, seatIdx: si, state: 'walkIn', walkT: 0, lookT: rng() * 5, lookYaw: 0, talk: 0,
       path: [new THREE.Vector3(5.6 - n * 0.4, 0, 5.4 + n * 0.3), seat.pos.clone().add(new THREE.Vector3(Math.sign(seat.pos.x - t.pos.x) * 0.45, 0, 0))] };
@@ -507,11 +572,7 @@ function handleTap(x, y) {
     if (o.userData.samovar) { goTo(SAMOVAR_SERVE.clone(), { type: 'samovar' }); flashMarker(SAMOVAR_SERVE); return; }
     if (o.userData.table !== undefined) {
       const t = tables[o.userData.table];
-      // approach point: in front of table (camera side) or nearest free side
-      const dir = W.pos.clone().sub(t.pos); dir.y = 0;
-      if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
-      dir.normalize(); if (Math.abs(dir.x) > 0.7) dir.set(0, 0, Math.sign(dir.z || 1)).normalize();
-      const p = t.pos.clone().addScaledVector(dir, 0.95);
+      const p = serveSpot(t).spot; // right beside the customer, at the table edge
       goTo(p, { type: 'table', table: t }); flashMarker(p); return;
     }
   }
@@ -542,47 +603,86 @@ let started = false, gameOver = false, spawnTimer = 2, elapsed = 0;
 function arrive() {
   const a = W.action; W.action = null; if (!a) return;
   if (a.type === 'samovar') {
-    if (camMode !== 'first') W.yaw = -Math.PI / 2;
+    if (W.pos.distanceTo(SAMOVAR_SERVE) <= 0.3) W.pos.copy(SAMOVAR_SERVE);
     startBrew(false);
   } else if (a.type === 'table') {
-    const t = a.table;
-    if (camMode !== 'first') W.yaw = Math.atan2(t.pos.x - W.pos.x, t.pos.z - W.pos.z);
+    const t = a.table; const S = serveSpot(t); if (W.pos.distanceTo(S.spot) <= 0.3) W.pos.copy(S.spot);
+    if (camMode !== 'first') W.yaw = Math.atan2(S.place.x - W.pos.x, S.place.z - W.pos.z);
     serveTable(t, false);
   }
 }
+// ---- close serving: stand beside the customer at the table edge, reach, hand carries the glass to the contact point
+function nextServeMember(P) { const t = P.table; return P.members.find(m => !t.glasses[m.seatIdx].visible && !t.glasses[m.seatIdx].pending); }
+function serveSpot(t) {
+  const P = t.party, m = P && nextServeMember(P);
+  const side = m ? Math.sign(m.seat.pos.x - t.pos.x) : (W.pos.x >= t.pos.x ? 1 : -1);
+  const zs = W.pos.z >= t.pos.z ? 1 : -1;
+  return { m, side, zs, spot: new THREE.Vector3(t.pos.x + side * 0.84, 0, t.pos.z + zs * 0.64),
+    place: new THREE.Vector3(t.pos.x + side * 0.38, 0.765, t.pos.z + zs * 0.28) };
+}
 function startBrew(auto) {
-  if (W.busy > 0) return;
+  if (W.busy > 0 || W.lock > 0) return;
   if (W.tray >= 3) { if (!auto) toast('Tepsi zaten dolu!'); return; }
-  W.target = null; W.action = null; W.yaw = Math.atan2(SAMOVAR_POS.x - W.pos.x, SAMOVAR_POS.z - W.pos.z);
-  W.busy = 2.6; W.brewT = 0; W.picked = false; ownerAnim.setOverride('pour'); toast('Çay dolduruluyor…', 'rgba(120,70,20,.92)');
+  if (W.pos.distanceTo(SAMOVAR_SERVE) > 0.25) { goTo(SAMOVAR_SERVE.clone(), { type: 'samovar' }); return; }
+  W.target = null; W.action = null; W.yaw = -Math.PI / 2; // face the counter / owner
+  W.busy = 3.0; W.brewT = 0; W.picked = false; W.trayHolder = null; ownerAnim.setOverride('pour'); toast('Çay dolduruluyor…', 'rgba(120,70,20,.92)');
 }
 function serveTable(t, auto) {
   const P = t.party;
   if (!P || P.state !== 'waiting') { if (!auto && P && P.state === 'drinking') toast('Afiyet olsun!', 'rgba(40,110,50,.92)'); return; }
   if (W.tray <= 0) { if (!auto) toast('Önce semaverden çay al!'); else if (!t.warned) { t.warned = true; toast('Önce semaverden çay al!'); } return; }
-  const n = Math.min(P.need, W.tray); W.tray -= n; P.need -= n;
-  W.target = null; W.action = null; W.yaw = Math.atan2(t.pos.x - W.pos.x, t.pos.z - W.pos.z);
-  const dur = waiterAnim.playOnce('serve', 1.15); W.lock = dur ? dur * 0.85 : 0;
-  // glasses go to the seats that do not have one yet
-  const targets = P.members.map(m => t.glasses[m.seatIdx]).filter(g => !g.visible && !g.pending).slice(0, n);
-  targets.forEach(g => { g.pending = true; setTimeout(() => { g.pending = false; if (t.party === P) g.visible = true; }, dur ? dur * 500 : 0); });
-  const left = 1 - P.patience / P.maxPatience; const tip = Math.round(left * 5);
-  const earned = n * 5 + tip * (P.need === 0 ? 1 : 0); stats.money += earned;
-  floatText(t.pos.clone().setY(1.6), `+${earned} ₺`);
+  if (W.fly || W.busy > 0 || W.lock > 0) return;
+  const S = serveSpot(t); if (!S.m) return;
+  if (W.pos.distanceTo(S.spot) > 0.3) { goTo(S.spot, { type: 'table', table: t }); return; }
+  W.target = null; W.action = null;
+  // turn a little to the right so the LEFT (serving) hand, not the chest, lines up with the place point
+  { const dx = S.place.x - W.pos.x, dz = S.place.z - W.pos.z; W.yaw = Math.atan2(dx, dz) - 0.55; } // serve clip's left hand lands ~31° left of facing, ~0.57 m out
+  W.tray--; P.need--; S.m.table.glasses[S.m.seatIdx].pending = true;
+  const dur = waiterAnim.playOnce('serve', 1.0) || 1.0; W.lock = dur;
+  W.fly = { t, P, m: S.m, glass: t.glasses[S.m.seatIdx], place: S.place, time: 0, dur, placed: false };
+  flyGlass.visible = true; updateHud();
+}
+// the glass that travels tray -> left hand -> table
+const flyGlass = tables[0].glasses[0].clone(); flyGlass.visible = false; scene.add(flyGlass);
+const _fg = new THREE.Vector3(), _fc = new THREE.Vector3();
+function updateFlyGlass(dt) {
+  const F = W.fly; if (!F) return; F.time += dt; const u = F.time / F.dur;
+  const handPt = handBoneL && waiterAnim.ok ? palm(handBoneL, _fg) : _fg.copy(handTray.position).add(new THREE.Vector3(0, 0.1, 0)).lerp(F.place, Math.min(1, Math.max(0, (u - 0.2) / 0.4)));
+  if (u < 0.2) flyGlass.position.copy(handTray.position).add(_fc.set(0, 0.05, 0));                 // still on the tray
+  else if (u < 0.24) flyGlass.position.lerpVectors(_fc.copy(handTray.position).setY(handTray.position.y + 0.05), handPt, (u - 0.2) / 0.04); // picked up
+  else if (!F.placed) {
+    flyGlass.position.copy(handPt).y -= 0.045;                                                     // in the hand
+    if (u >= 0.56) { // contact: put it down exactly under the hand, clamped to the table top
+      const loc = _fc.copy(handPt).sub(F.t.pos); loc.x = THREE.MathUtils.clamp(loc.x, -0.48, 0.48); loc.z = THREE.MathUtils.clamp(loc.z, -0.48, 0.48);
+      F.glass.position.set(loc.x, 0.76, loc.z); F.glass.visible = F.t.party === F.P; F.glass.pending = false; flyGlass.visible = false; F.placed = true;
+      onGlassPlaced(F);
+    }
+  }
+  if (u >= 1) { W.fly = null; flyGlass.visible = false; if (!F.placed) { F.glass.visible = F.t.party === F.P; F.glass.pending = false; onGlassPlaced(F); }
+    // pair: walk round to the other customer and serve the second glass
+    if (F.P.state === 'waiting' && F.P.need > 0 && W.tray > 0 && F.t.party === F.P) setTimeout(() => serveTable(F.t, true), 50); }
+}
+function onGlassPlaced(F) {
+  const P = F.P; if (F.t.party !== P) return;
+  let earned = 5;
   if (P.need === 0) {
+    const tip = Math.round((1 - P.patience / P.maxPatience) * 5); earned += tip;
     stats.served += P.members.length; P.state = 'drinking'; P.drinkT = 8 + rng() * 4; removeBubble(P);
     toast(tip >= 3 ? 'Eline sağlık! 😊' : 'Teşekkürler!', 'rgba(40,110,50,.92)');
   } else toast(`Bir çay daha lazım! (${P.need})`, 'rgba(120,70,20,.92)');
-  updateHud();
+  stats.money += earned; floatText(F.t.pos.clone().setY(1.6), `+${earned} ₺`); updateHud();
 }
 function finishBrew() { if (W.tray < 3) { W.tray = 3; updateHud(); } toast('Çay hazır! 🍵', 'rgba(40,110,50,.92)'); }
 
 function updateWaiter(dt) {
   if (W.busy > 0) {
     W.busy -= dt; W.brewT += dt;
-    if (W.brewT > 1.4 && !W.picked) { W.picked = true; ownerAnim.setOverride(null); W.pickDur = waiterAnim.playOnce('pickup', 1.0); }
-    if (W.picked && W.tray < 3 && W.brewT > 1.4 + (W.pickDur || 0) * 0.45) { W.tray = 3; updateHud(); }
-    if (W.busy <= 0) finishBrew();
+    // 0-1.4 s owner pours; 1.4 owner lifts the tray and reaches over the counter; waiter reaches, takes it, lifts to carry
+    if (W.brewT > 1.4 && !W.ownerGive) { W.ownerGive = true; ownerAnim.setOverride(null); ownerAnim.playOnce('pickup', 0.9); W.trayHolder = 'owner'; W.showTray = true; }
+    if (W.brewT > 1.6 && !W.picked) { W.picked = true; W.pickDur = waiterAnim.playOnce('pickup', 0.9) || 1.2; }
+    if (W.picked && W.trayHolder === 'owner' && W.brewT > 1.6 + W.pickDur * 0.36) { W.trayHolder = 'transfer'; W.transferK = 0; }
+    if (W.trayHolder === 'transfer') { W.transferK = Math.min(1, W.transferK + dt / 0.3); if (W.transferK >= 1) { W.trayHolder = null; W.tray = 3; updateHud(); } }
+    if (W.busy <= 0) { W.ownerGive = false; W.showTray = false; W.trayHolder = null; finishBrew(); }
   }
   if (W.lock > 0) W.lock -= dt;
   const blocked = W.busy > 0 || W.lock > 0;
@@ -595,7 +695,7 @@ function updateWaiter(dt) {
       W.pos.addScaledVector(d, step); pushOut(W.pos, 0.25, null);
       W.yaw = Math.atan2(d.x, d.z); W.moving = true;
       // stuck guard: if pushed back and not progressing, give up once close enough
-      if (dist < 0.5 && W.pos.distanceTo(W.target) > dist - step * 0.2) { W.target = null; arrive(); }
+      if (dist < 0.5 && W.pos.distanceTo(W.target) > dist - step * 0.2) { W.pos.lerp(W.target, 0.5); W.target = null; arrive(); }
     }
   }
   // joystick / keyboard movement (3rd & 1st person)
@@ -608,6 +708,7 @@ function updateWaiter(dt) {
     // dead zone + response curve: small push = walk, full push = run
     const m = raw < 0.15 ? 0 : (raw - 0.15) / 0.85;
     const wantSpeed = m < 0.6 ? THREE.MathUtils.lerp(0.4, 1.6, m / 0.6) : THREE.MathUtils.lerp(1.6, 3.6, (m - 0.6) / 0.4);
+    W.stickOn = m > 0;
     if (m > 0) {
       W.target = null; W.action = null;
       const f = new THREE.Vector3(Math.sin(viewYaw), 0, Math.cos(viewYaw)), r = new THREE.Vector3(-Math.cos(viewYaw), 0, Math.sin(viewYaw));
@@ -620,21 +721,24 @@ function updateWaiter(dt) {
   }
   if (camMode === 'first') W.yaw = viewYaw;
   // auto pick-up / serve when close (follow cameras)
-  if (camMode !== 'top' && !blocked) {
-    if (W.pos.distanceTo(SAMOVAR_SERVE) < 1.0 && W.tray < 3) startBrew(true);
+  if (camMode !== 'top' && !blocked && !W.stickOn && !W.fly) {
+    if (W.pos.distanceTo(SAMOVAR_SERVE) < 1.4 && W.tray < 3 && W.action?.type !== 'samovar') startBrew(true);
+    let best = null, bd = 1.6;
     for (const t of tables) {
       const d = Math.hypot(W.pos.x - t.pos.x, W.pos.z - t.pos.z);
-      if (d < 1.45) serveTable(t, true); else t.warned = false;
+      if (d < bd && t.party && t.party.state === 'waiting') { best = t; bd = d; }
+      if (d > 1.7) t.warned = false;
     }
+    if (best && (!W.target || W.action?.table !== best)) serveTable(best, true);
   }
-  handTray.visible = W.tray > 0;
+  handTray.visible = W.tray > 0 || !!W.showTray;
   const o = waiter.outer, i = waiter.inner;
   // smooth turn toward movement direction (critically damped feel)
   o.rotation.y = lerpAngle(o.rotation.y, W.yaw, 1 - Math.exp(-dt * (camMode === 'first' ? 30 : 10)));
   const actual = W.pos.distanceTo(prevPos) / Math.max(dt, 1e-4);
   W.curSpeed = THREE.MathUtils.lerp(W.curSpeed, W.moving ? actual : 0, 1 - Math.exp(-dt * 10));
-  if (waiterAnim.ok) { waiterAnim.update(dt, W.curSpeed, W.tray > 0); placeHandTray(); return; }
-  placeHandTray();
+  if (waiterAnim.ok) { waiterAnim.update(dt, W.curSpeed, W.tray > 0); placeHandTray(); updateFlyGlass(dt); return; }
+  placeHandTray(); updateFlyGlass(dt);
   // fallback fake walk: bob + sway + lean
   if (W.moving) W.walkT += dt * 9; else W.walkT = 0;
   const amt = W.moving ? 1 : 0;
@@ -670,14 +774,14 @@ function updateCustomers(dt) {
       if (dist < 0.06) {
         c.path.shift();
         if (!c.path.length) {
-          if (c.state === 'walkIn') { c.state = 'seated'; g.position.copy(c.seat.pos); g.rotation.y = c.seat.faceY; poseSit(c); }
-          else { removeChat(c); scene.remove(g); customers.splice(k, 1); continue; }
+          if (c.state === 'walkIn') { c.state = 'seated'; g.position.copy(c.seat.pos); g.rotation.y = c.seat.faceY; if (c.rig) c.anim.setOverride('sit'); else poseSit(c); }
+          else { removeChat(c); scene.remove(g); customers.splice(k, 1); if (c.collider) camColliders.splice(camColliders.indexOf(c.collider), 1); continue; }
         }
       } else {
         d.normalize(); g.position.addScaledVector(d, Math.min(dist, 1.5 * dt));
         if (c.path.length > 1 || c.state === 'leaving') pushOut(g.position, 0.2, c.state === 'leaving' ? c.table : null);
         g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(d.x, d.z), Math.min(1, dt * 10));
-        c.walkT += dt * 8; poseStand(c, c.walkT);
+        if (c.rig) c.anim.update(dt, 1.5, false); else { c.walkT += dt * 8; poseStand(c, c.walkT); }
       }
     } else if (c.state === 'seated') {
       const P = c.party, other = P.members.find(m => m !== c && m.state === 'seated');
@@ -686,14 +790,29 @@ function updateCustomers(dt) {
       if (c.lookT <= 0) { c.lookT = 2 + rng() * 3; c.lookYaw = (rng() - 0.5) * 1.4; }
       let wantYaw = c.lookYaw, wantPitch = 0;
       if (other && (c.talk > 0 || other.talk > 0)) { wantYaw = 0; wantPitch = c.talk > 0 ? Math.sin(elapsed * 7) * 0.06 : Math.max(0, Math.sin(elapsed * 2.5)) * 0.12; }
+      const drinking = P.state === 'drinking' && c.table.glasses[c.seatIdx].visible;
+      if (c.rig) {
+        c.headYaw = lerpAngle(c.headYaw, wantYaw, 1 - Math.exp(-dt * 5)); c.headPitch += (wantPitch - c.headPitch) * Math.min(1, dt * 8);
+        if (c.talk > 0) c.talk -= dt;
+        const sip = drinking && ((elapsed * 0.33 + c.seatIdx * 0.5) % 1) < 0.35;
+        c.anim.setOverride(c.talk > 0 ? 'sit_talk' : sip ? 'sit_drink' : 'sit');
+        c.anim.update(dt, 0, false);
+        turnHead(c);
+      } else {
       c.headG.rotation.y = lerpAngle(c.headG.rotation.y, wantYaw, 1 - Math.exp(-dt * 5));
       c.headG.rotation.x += (wantPitch - c.headG.rotation.x) * Math.min(1, dt * 8);
       // talk gestures: forearm waves while speaking; drinking lifts the glass now and then
-      const drinking = P.state === 'drinking' && c.table.glasses[c.seatIdx].visible;
       if (c.talk > 0) { c.talk -= dt; c.arms[0].rotation.x = -0.9 + Math.sin(elapsed * 6) * 0.35; c.arms[0].rotation.z = 0.2 + Math.sin(elapsed * 4.3) * 0.15; }
       else { c.arms[0].rotation.x += (-0.5 - c.arms[0].rotation.x) * Math.min(1, dt * 4); c.arms[0].rotation.z *= 0.9; }
       c.arms[1].rotation.x = drinking && Math.sin(elapsed * 0.9 + c.seatIdx * 2) > 0.6 ? -1.4 : -0.5;
       c.body.rotation.x = c.talk > 0 ? -0.05 : 0;
+      }
+    }
+    if (c.rig && c.lids.length) { // blink every 2.5–6 s
+      c.blinkT -= dt;
+      const closed = c.blinkT < 0 && c.blinkT > -0.13;
+      for (const l of c.lids) { l.visible = closed; l.scale.y = closed ? Math.sin((-c.blinkT / 0.13) * Math.PI) * 0.6 + 0.5 : 1; }
+      if (c.blinkT <= -0.13) c.blinkT = 2.5 + rng() * 3.5;
     }
     if (c.chat) {
       c.chatLeft -= dt; if (c.chatLeft <= 0) removeChat(c);
@@ -733,7 +852,7 @@ function leaveParty(P, angry) {
   t.glasses.forEach(g => { g.visible = false; g.pending = false; }); t.party = null; t.customer = null;
   parties.splice(parties.indexOf(P), 1);
   P.members.forEach((c, n) => {
-    removeChat(c); c.state = 'leaving'; g_standUp(c); c.headG.rotation.set(0, 0, 0);
+    removeChat(c); c.state = 'leaving'; g_standUp(c); if (c.headG) c.headG.rotation.set(0, 0, 0);
     c.path = [c.seat.pos.clone().add(new THREE.Vector3(Math.sign(c.seat.pos.x - t.pos.x) * 0.5, 0, 0.5)), new THREE.Vector3(5.6, 0, 5.4 + n * 0.4), ENTRANCE.clone().add(new THREE.Vector3(1.5, 0, n * 0.4))];
   });
   if (angry) {
@@ -741,7 +860,16 @@ function leaveParty(P, angry) {
     if (stats.angry >= 5) endGame();
   }
 }
-function g_standUp(c) { c.body.position.y = 0; c.body.rotation.x = 0; c.arms.forEach(a => { a.rotation.set(0, 0, 0); }); for (const l of c.legs) { l.hip.rotation.x = 0; l.knee.rotation.x = 0; } }
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qp = new THREE.Quaternion(), _ax = new THREE.Vector3();
+function turnHead(c) { // world-space yaw/nod applied on top of the animated head bone (axis-agnostic)
+  const hb = c.headBone; if (!hb || !hb.parent) return;
+  const th = c.group.rotation.y;
+  _qa.setFromAxisAngle(_ax.set(0, 1, 0), c.headYaw); _qb.setFromAxisAngle(_ax.set(Math.cos(th), 0, -Math.sin(th)), c.headPitch); _qa.premultiply(_qb);
+  hb.parent.getWorldQuaternion(_qp);
+  const delta = _qp.clone().invert().multiply(_qa).multiply(_qp);
+  hb.quaternion.premultiply(delta);
+}
+function g_standUp(c) { if (c.rig) { c.anim.setOverride(null); c.headYaw = c.headPitch = 0; c.lids.forEach(l => l.visible = false); return; } c.body.position.y = 0; c.body.rotation.x = 0; c.arms.forEach(a => { a.rotation.set(0, 0, 0); }); for (const l of c.legs) { l.hip.rotation.x = 0; l.knee.rotation.x = 0; } }
 function endGame() {
   gameOver = true;
   const ov = $('overlay'); ov.classList.remove('hidden'); ov.style.display = 'flex';
@@ -787,6 +915,7 @@ const _v = new THREE.Vector3(), _r = new THREE.Vector3(), _s = new THREE.Vector3
 const camPivot = new THREE.Vector3(), camRay = new THREE.Raycaster(); const OTS_DIST = 2.6; let camCurDist = OTS_DIST;
 const camColliders = []; scene.traverse(o => { if (o.isMesh && o.userData.camBlock) camColliders.push(o); });
 function updateCamera(dt, snap) {
+  if (window.__camOverride) { const o = window.__camOverride; camera.position.set(...o.pos); camera.lookAt(...o.look); return; }
   if (camMode !== 'top') {
     const f = _v.set(Math.sin(viewYaw) * Math.cos(viewPitch), Math.sin(viewPitch), Math.cos(viewYaw) * Math.cos(viewPitch));
     if (camMode === 'third') {
@@ -837,7 +966,7 @@ $('startBtn').onclick = () => {
 };
 applyCamMode();
 if (new URLSearchParams(location.search).has('autostart')) $('startBtn').onclick();
-window.__game = { W, customers, tables, stats, spawnCustomer, handTray, seatAll: () => customers.forEach(c => { if (c.state === 'walkIn') { c.path = [c.path[c.path.length - 1]]; c.group.position.copy(c.path[0]); } }), tap: handleTap, parties, clearParties: () => [...parties].forEach(P => leaveParty(P, false)), cycleCam, joy, waiterAnim, ownerAnim, setView: (y, p) => { viewYaw = y; viewPitch = p; }, startBrew, serveTable, get camMode() { return camMode; }, tapWorld: (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); handleTap((v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight); } };
+window.__game = { W, customers, tables, stats, spawnCustomer, handTray, seatAll: () => customers.forEach(c => { if (c.state === 'walkIn') { c.path = [c.path[c.path.length - 1]]; c.group.position.copy(c.path[0]); } }), tap: handleTap, parties, serveSpot, flyGlass, camColliders: () => camColliders, clearParties: () => [...parties].forEach(P => leaveParty(P, false)), cycleCam, joy, waiterAnim, ownerAnim, setView: (y, p) => { viewYaw = y; viewPitch = p; }, startBrew, serveTable, get camMode() { return camMode; }, tapWorld: (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); handleTap((v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight); } };
 
 // ---------- loop ----------
 const clock = new THREE.Clock();
