@@ -41,6 +41,23 @@
     <button id="startBtn" class="hidden">Başla</button>
   </div>
 </div>
+<div id="menu" class="hidden">
+  <div class="mTop">
+    <div class="mLogo"><span>ÇAY</span> BAHÇESİ<small>Garson Simülasyonu</small></div>
+    <div class="mStats">
+      <div class="mLv"><div class="mLvBadge"><small>SV</small><b id="mLevel">1</b></div><div class="mXpWrap"><div class="mXpBar"><i id="mXp"></i></div><span id="mXpTxt">0 / 100 XP</span></div></div>
+      <div class="mCoin">🪙 <b id="mMoney">0</b></div>
+    </div>
+  </div>
+  <div class="mLeft">
+    <button class="mBtn play" data-p="play"><span>▶</span> OYNA</button>
+    <button class="mBtn" data-p="venues"><span>🏞️</span> MEKANLAR</button>
+    <button class="mBtn" data-p="shop"><span>🛒</span> MAĞAZA</button>
+    <button class="mBtn" data-p="settings"><span>⚙️</span> AYARLAR</button>
+  </div>
+  <div id="mPanel" class="mPanel"></div>
+  <div class="mBottom">📍 <b id="mVenue">Boğaz Çay Bahçesi</b> &nbsp;·&nbsp; v6 demo</div>
+</div>
 <div id="err"></div>
 <script>
 window.addEventListener('error', e => { const el=document.getElementById('err'); el.style.display='block'; el.textContent += 'Hata: ' + e.message + ' (' + (e.filename||'').split('/').pop() + ':' + e.lineno + ')\n'; });

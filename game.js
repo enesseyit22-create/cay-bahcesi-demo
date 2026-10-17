@@ -7,38 +7,50 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 const CUSTOMER_MODELS = [
   { url: 'cust_young', label: 'genç', scale: [0.93, 1.03], eyes: [[-0.035, 1.764], [0.035, 1.764]], skin: 0xc28c72, clothBelowY: 1.6, fez: 0.3 },
   { url: 'cust_old', label: 'yaşlı', scale: [0.93, 1.0], eyes: [[-0.0425, 1.7675], [0.045, 1.7675]], skin: 0xb58068, clothBelowY: 1.6, fez: 0 },
+  // Meshy customers from the 17 Oct transfer (own clothing -> no tint); weight = relative spawn frequency
+  { url: 'cust_hijab', label: 'başörtülü kadın', scale: [0.88, 0.93], eyes: [[-0.03, 1.72], [0.035, 1.72]], skin: 0xe0b8a8, tint: false, fez: 0, weight: 1.5 },
+  { url: 'cust_elder', label: 'gözlüklü amca', scale: [0.94, 0.98], eyes: [[-0.0375, 1.72], [0.04, 1.72]], skin: 0xd8b8a8, tint: false, fez: 0, weight: 1.5 },
+  { url: 'cust_hoodie', label: 'kapüşonlu genç', scale: [0.96, 1.01], eyes: [[-0.035, 1.715], [0.0325, 1.715]], skin: 0xd0a088, tint: false, fez: 0, weight: 1.5 },
+  { url: 'cust_tourist', label: 'turist', scale: [0.9, 0.95], eyes: [[-0.0425, 1.696], [0.04, 1.696]], skin: 0xe8c0a8, tint: false, fez: 0, weight: 1.5 },
 ];
 const CLOTH_TINTS = [0x5b8fd9, 0xd9534f, 0x6fbf73, 0xe0b44a, 0x9b6fd1, 0x4fb8b0, 0xe58a4e, 0xcfcfcf, 0x8d6e63];
 
 // ---------- renderer / scene ----------
 const canvas = document.getElementById('c');
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || matchMedia('(pointer:coarse)').matches;
+// ---------- persistent profile + settings (localStorage) ----------
+const PROFILE = Object.assign({ money: 0, xp: 0, venue: 'bogaz' }, JSON.parse(localStorage.getItem('cay_profile') || '{}'));
+const SETTINGS = Object.assign({ quality: isMobile ? 'orta' : 'yuksek', sens: 1.0 }, JSON.parse(localStorage.getItem('cay_settings') || '{}'));
+const levelOf = (xp) => 1 + Math.floor(xp / 100);
+const saveProfile = () => localStorage.setItem('cay_profile', JSON.stringify(PROFILE));
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile || devicePixelRatio < 2, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile ? 1.5 : 2));
+const QUALITY = { dusuk: { pr: 1, shadow: 512 }, orta: { pr: 1.5, shadow: 1024 }, yuksek: { pr: 2, shadow: 2048 } };
+renderer.setPixelRatio(Math.min(devicePixelRatio, QUALITY[SETTINGS.quality].pr));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 { // sky gradient background
   const c = document.createElement('canvas'); c.width = 2; c.height = 256;
   const g = c.getContext('2d'); const gr = g.createLinearGradient(0, 0, 0, 256);
-  gr.addColorStop(0, '#7fb0d8'); gr.addColorStop(0.55, '#f2c99a'); gr.addColorStop(1, '#f6a96b');
+  gr.addColorStop(0, '#5f8fc4'); gr.addColorStop(0.35, '#9fb7cf'); gr.addColorStop(0.62, '#f3c48e'); gr.addColorStop(0.85, '#f39a5c'); gr.addColorStop(1, '#e9814a');
   g.fillStyle = gr; g.fillRect(0, 0, 2, 256);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; scene.background = t;
 }
-scene.fog = new THREE.Fog(0xf0c69c, 35, 95);
+scene.fog = new THREE.Fog(0xf0b88a, 40, 110);
 
 const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 200);
 
 // lights: warm low afternoon sun from the west/south-west
-const hemi = new THREE.HemisphereLight(0xd6e6ff, 0x9a7454, 1.6); scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffd2a0, 2.6);
-sun.position.set(-9, 13, 7); sun.castShadow = true;
-sun.shadow.mapSize.set(isMobile ? 1024 : 2048, isMobile ? 1024 : 2048);
-const sc = sun.shadow.camera; sc.left = -10; sc.right = 10; sc.top = 10; sc.bottom = -10; sc.near = 1; sc.far = 40;
+const hemi = new THREE.HemisphereLight(0xb9d0ee, 0x8f6a48, 1.25); scene.add(hemi);
+const SUN_DIR = new THREE.Vector3(-13, 8.5, -11).normalize(); // golden hour: low sun over the Bosphorus, shadows fall towards the garden
+const sun = new THREE.DirectionalLight(0xffc28a, 3.1);
+sun.position.copy(SUN_DIR).multiplyScalar(18); sun.castShadow = true;
+sun.shadow.mapSize.setScalar(QUALITY[SETTINGS.quality].shadow);
+const sc = sun.shadow.camera; sc.left = -11; sc.right = 11; sc.top = 11; sc.bottom = -11; sc.near = 1; sc.far = 45;
 sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03; sun.shadow.radius = 3;
 scene.add(sun); scene.add(sun.target);
 
@@ -48,6 +60,20 @@ const SEA_EDGE_Z = -6.2;
 const ENTRANCE = new THREE.Vector3(7.6, 0, 5.4);
 const SAMOVAR_POS = new THREE.Vector3(-5.6, 0, 1.6);   // counter centre
 const SAMOVAR_SERVE = new THREE.Vector3(-4.72, 0, 1.75); // waiter stands ~0.33 m from the counter edge, opposite the owner
+// ---------- venues: each venue is a self-contained scene config (menu "MEKANLAR" lists them) ----------
+const VENUES = [
+  { id: 'bogaz', name: 'Boğaz Çay Bahçesi', desc: 'İstanbul, Boğaz kıyısı', level: 1,
+    trees: [[-6.6, -4.8, 1.0], [6.7, -4.6, 0.95], [7.4, 2.8, 0.85]],           // çınar x, z, scale
+    lamps: [[-7.15, -1.6], [7.15, -1.9], [-7.15, 4.9], [7.15, 3.6]],            // street lamps along the side paths
+    benches: [[-4.6, 6.85, Math.PI], [1.0, 6.85, Math.PI]],                     // x, z, yaw
+    pots: [-4.4, -0.9, 2.7, 5.4],                                                // geranium pots along the railing
+    railing: { x0: -8.1, x1: 8.1, z: -5.95 }, awning: true, sea: true },
+  { id: 'kapadokya', name: 'Kapadokya', desc: 'Peri bacaları, balonlar', level: 5, locked: true },
+  { id: 'karadeniz', name: 'Karadeniz Yaylası', desc: 'Sisli yayla, çay tarlaları', level: 10, locked: true },
+];
+const VENUE = VENUES[0];
+const PATIENCE_SCALE = 2.0; // customers wait ~2x longer than v4 (28–52 s before they get angry)
+const placeholders = { trees: [], railing: [], counter: [], pots: [] };
 const TABLE_POS = [[-2.6, -3.7], [0.9, -4.0], [4.3, -3.5], [-1.6, -0.3], [2.4, 0.1], [0.4, 3.4]];
 
 // ---------- procedural textures ----------
@@ -80,7 +106,18 @@ const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness
 {
   const tex = cobbleTexture(); tex.repeat.set(9, 8);
   const W = 16, D = 13.6;
-  const top = new THREE.Mesh(new THREE.PlaneGeometry(W, D), std(0xffffff, { map: tex }));
+  const groundMat = std(0xffffff, { map: tex });
+  const top = new THREE.Mesh(new THREE.PlaneGeometry(W, D), groundMat);
+  { // 1 texture tile = 1.8 m of granite setts
+    const tl = new THREE.TextureLoader(), rep = [W / 1.8, D / 1.8], an = renderer.capabilities.getMaxAnisotropy();
+    const T = (f, srgb) => { const t = tl.load('./assets/tex/' + f); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...rep); t.anisotropy = Math.min(8, an); if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+    const col = T('paving_Color.jpg', true);
+    col.onUpdate = () => { groundMat.map = col; groundMat.color.set(0xf2e6d6); groundMat.needsUpdate = true; col.onUpdate = null; };
+    groundMat.map = col; groundMat.color.set(0xf2e6d6);
+    groundMat.normalMap = T('paving_NormalGL.jpg'); groundMat.normalScale.set(1.1, 1.1);
+    groundMat.roughnessMap = T('paving_Roughness.jpg'); groundMat.roughness = 1;
+    groundMat.aoMap = T('paving_AmbientOcclusion.jpg'); groundMat.aoMapIntensity = 0.8;
+  }
   top.rotation.x = -Math.PI / 2; top.position.set(0, 0, SEA_EDGE_Z + D / 2); top.receiveShadow = true; scene.add(top);
   const edge = new THREE.Mesh(new THREE.BoxGeometry(W, 1.2, 0.5), std(0xa89a86));
   edge.position.set(0, -0.6, SEA_EDGE_Z + 0.2); scene.add(edge);
@@ -99,32 +136,46 @@ const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness
   const n = 33, post = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.035, 0.035, 1.0, 6), mat, n);
   const m = new THREE.Matrix4();
   for (let i = 0; i < n; i++) { m.makeTranslation(-8 + i * 0.5, 0.5, SEA_EDGE_Z + 0.25); post.setMatrixAt(i, m); }
-  post.castShadow = true; scene.add(post);
+  post.castShadow = true; scene.add(post); placeholders.railing.push(post);
   for (const y of [1.0, 0.55, 0.12]) {
     const r = new THREE.Mesh(new THREE.BoxGeometry(16, y === 1.0 ? 0.07 : 0.04, y === 1.0 ? 0.09 : 0.04), mat);
-    r.position.set(0, y, SEA_EDGE_Z + 0.25); r.castShadow = true; scene.add(r);
+    r.position.set(0, y, SEA_EDGE_Z + 0.25); r.castShadow = true; scene.add(r); placeholders.railing.push(r);
   }
 }
 // sea (animated shader)
-const seaUniforms = { uTime: { value: 0 }, uFog: { value: new THREE.Color(0xf0c69c) } };
+const seaUniforms = { uTime: { value: 0 }, uFog: { value: new THREE.Color(0xf0b88a) }, uSun: { value: SUN_DIR.clone() },
+  uNormal: { value: null }, uSkyTop: { value: new THREE.Color(0x4f7fb4) }, uSkyHor: { value: new THREE.Color(0x9db2c4) } };
 {
-  const geo = new THREE.PlaneGeometry(200, 90, 1, 1);
+  const wn = new THREE.TextureLoader().load('./assets/tex/waternormals.jpg'); wn.wrapS = wn.wrapT = THREE.RepeatWrapping; seaUniforms.uNormal.value = wn;
+  const geo = new THREE.PlaneGeometry(200, 90, 80, 36);
   const mat = new THREE.ShaderMaterial({
     uniforms: seaUniforms,
-    vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix*vec4(position,1.); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }`,
-    fragmentShader: `uniform float uTime; uniform vec3 uFog; varying vec3 vW;
-      float n(vec2 p){ return sin(p.x)*sin(p.y); }
+    vertexShader: `uniform float uTime; varying vec3 vW; varying float vH;
+      void main(){ vec4 w = modelMatrix*vec4(position,1.);
+        float h = sin(w.x*0.35+uTime*0.9)*0.06 + sin(w.z*0.52-uTime*1.1+w.x*0.13)*0.05 + sin((w.x+w.z)*0.9+uTime*1.7)*0.02;
+        w.y += h; vH = h; vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
+    fragmentShader: `uniform float uTime; uniform vec3 uFog, uSun, uSkyTop, uSkyHor; uniform sampler2D uNormal; varying vec3 vW; varying float vH;
+      vec3 nrm(vec2 uv){ return texture2D(uNormal, uv).xzy*2.-1.; }
       void main(){
         vec2 p = vW.xz;
-        float w = n(p*vec2(0.9,1.7)+vec2(uTime*0.6,uTime*0.35))*0.5 + n(p*vec2(2.3,3.1)-vec2(uTime*0.9,-uTime*0.5))*0.3 + n(p*vec2(5.1,4.3)+uTime*1.3)*0.2;
-        float d = clamp((-vW.z-6.)/60.,0.,1.);
-        vec3 deep = vec3(0.07,0.27,0.40), near = vec3(0.13,0.42,0.50);
-        vec3 col = mix(near, deep, d) + w*0.04;
-        float glint = smoothstep(0.55,0.95,w) * (0.35 + 0.65*smoothstep(0.,1.,d)) ;
-        col += vec3(1.0,0.82,0.55)*glint*0.45;
-        float sunPath = exp(-pow((vW.x+18.)/10.,2.)) * d; col += vec3(1.,.75,.45)*sunPath*(0.25+0.25*w);
-        float f = smoothstep(30.,90.,length(vW.xz-cameraPosition.xz));
-        gl_FragColor = vec4(mix(col,uFog,f*0.85),1.);
+        vec3 n = nrm(p*0.045+vec2(uTime*0.012,uTime*0.008)) + nrm(p*0.11-vec2(uTime*0.02,-uTime*0.013))*0.7 + nrm(p*0.31+vec2(-uTime*0.035,uTime*0.03))*0.35;
+        n = normalize(vec3(n.x*0.55, 1., n.z*0.55));
+        vec3 V = normalize(cameraPosition - vW); float dist = length(cameraPosition.xz - vW.xz);
+        // distance flattens the normals (mip-like) so the horizon reads calm
+        n = normalize(mix(n, vec3(0.,1.,0.), smoothstep(25.,90.,dist)*0.7));
+        float fres = 0.02 + 0.98*pow(1.-max(dot(n,V),0.), 5.);
+        vec3 Rf = reflect(-V, n);
+        vec3 sky = mix(uSkyHor, uSkyTop, smoothstep(0.0, 0.45, Rf.y));
+        float d = clamp((-vW.z-6.)/55.,0.,1.);
+        vec3 deep = vec3(0.035,0.17,0.26), shallow = vec3(0.07,0.31,0.36);
+        vec3 water = mix(shallow, deep, d) * (0.75 + 0.5*max(dot(n, uSun), 0.));
+        water += vec3(0.05,0.12,0.1)*smoothstep(0.03,0.12,vH); // light through crests
+        vec3 col = mix(water, sky, clamp(fres*0.85, 0., 0.62));
+        col += vec3(0.25,0.12,0.03)*pow(max(dot(normalize(vec3(Rf.x,0.,Rf.z)), normalize(vec3(uSun.x,0.,uSun.z))),0.),6.)*fres; // warm sky glow toward the sun
+        float spec = pow(max(dot(Rf, uSun), 0.), 380.)*7. + pow(max(dot(Rf, uSun), 0.), 40.)*0.25;
+        col += vec3(1.,0.8,0.55)*spec;
+        float f = smoothstep(35.,105.,dist);
+        gl_FragColor = vec4(mix(col,uFog,f*0.8),1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`
@@ -155,14 +206,37 @@ const seaUniforms = { uTime: { value: 0 }, uFog: { value: new THREE.Color(0xf0c6
     const cone = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.4, 8), std(0x7a8a99)); cone.position.set(x, 9.5, -63); scene.add(cone);
   }
 }
-// ferry (vapur)
+// ferry (vapur): white two-deck Bosphorus ferry, black hull, yellow funnel with black top, windows, mast + flag, wake
 const ferry = new THREE.Group();
 {
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(7, 0.9, 1.8), std(0xf3f0ea)); hull.position.y = 0.2; ferry.add(hull);
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(7.02, 0.18, 1.82), std(0x2a2a2a)); stripe.position.y = -0.2; ferry.add(stripe);
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.8, 1.5), std(0xffffff)); cabin.position.y = 1.0; ferry.add(cabin);
-  const chim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.9, 8), std(0xd6a548)); chim.position.y = 1.8; ferry.add(chim);
-  ferry.position.set(-40, -0.4, -26); scene.add(ferry);
+  const winTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 32; const g = c.getContext('2d');
+    g.fillStyle = '#f4f1ea'; g.fillRect(0, 0, 256, 32); g.fillStyle = '#23384a';
+    for (let i = 0; i < 16; i++) g.fillRect(6 + i * 15.6, 8, 10, 14);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; return t; })();
+  const white = std(0xf4f1ea, { roughness: 0.5 }), black = std(0x1d1d1f, { roughness: 0.6 }), yellow = std(0xe0a526, { roughness: 0.45 });
+  // hull: extruded side profile with raked bow and stern
+  const hs = new THREE.Shape(); hs.moveTo(-9, -0.9); hs.lineTo(8.2, -0.9); hs.quadraticCurveTo(9.4, -0.3, 9.6, 0.9); hs.lineTo(-9.4, 0.9); hs.quadraticCurveTo(-9.6, -0.2, -9, -0.9);
+  const hullG = new THREE.ExtrudeGeometry(hs, { depth: 3.6, bevelEnabled: true, bevelSize: 0.25, bevelThickness: 0.3, bevelSegments: 2, curveSegments: 8 }); hullG.translate(0, 0, -1.8);
+  const hull = new THREE.Mesh(hullG, black); ferry.add(hull);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(18.6, 0.55, 4.25), white); band.position.y = 0.75; ferry.add(band);
+  const deck1 = new THREE.Mesh(new THREE.BoxGeometry(14.5, 1.5, 3.7), [white, white, white, white, new THREE.MeshStandardMaterial({ map: winTex, roughness: 0.5 }), new THREE.MeshStandardMaterial({ map: winTex, roughness: 0.5 })]);
+  deck1.position.y = 1.75; ferry.add(deck1);
+  const wt2 = winTex.clone(); wt2.repeat.set(0.8, 1); wt2.needsUpdate = true;
+  const deck2 = new THREE.Mesh(new THREE.BoxGeometry(10.5, 1.2, 3.3), [white, white, white, white, new THREE.MeshStandardMaterial({ map: wt2, roughness: 0.5 }), new THREE.MeshStandardMaterial({ map: wt2, roughness: 0.5 })]);
+  deck2.position.set(-0.6, 3.1, 0); ferry.add(deck2);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(11.4, 0.12, 3.9), white); roof.position.set(-0.6, 3.76, 0); ferry.add(roof);
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.9, 2.6), white); bridge.position.set(3.6, 4.25, 0); ferry.add(bridge);
+  const funnel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 2.0, 14), yellow); funnel.position.set(-1.2, 4.75, 0); ferry.add(funnel);
+  const ftop = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.45, 14), black); ftop.position.set(-1.2, 5.9, 0); ferry.add(ftop);
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 3.2, 6), white); mast.position.set(5.6, 5.0, 0); ferry.add(mast);
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.6), new THREE.MeshStandardMaterial({ color: 0xd3141c, side: THREE.DoubleSide })); flag.position.set(-8.9, 2.5, 0); ferry.add(flag); ferry.userData.flag = flag;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 5), white); pole.position.set(-9.3, 2.2, 0); ferry.add(pole);
+  const rails = new THREE.Mesh(new THREE.BoxGeometry(15, 0.5, 3.75), new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 })); rails.position.y = 2.75; ferry.add(rails);
+  // foam wake
+  const wake = new THREE.Mesh(new THREE.PlaneGeometry(16, 3.2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, depthWrite: false, fog: true }));
+  wake.rotation.x = -Math.PI / 2; wake.position.set(-15, -0.17, 0); ferry.add(wake);
+  ferry.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+  ferry.position.set(-50, -0.4, -38); scene.add(ferry);
 }
 // trees (çınar-like)
 function makeTree(x, z, s = 1) {
@@ -175,15 +249,20 @@ function makeTree(x, z, s = 1) {
     const b = new THREE.Mesh(new THREE.IcosahedronGeometry((1.0 + rnd() * 0.5) * s, 0), leaf);
     b.position.set((rnd() - .5) * 1.6 * s, (2.9 + rnd() * 0.9) * s, (rnd() - .5) * 1.6 * s); b.castShadow = true; b.userData.camBlock = true; g.add(b);
   }
-  g.position.set(x, 0, z); scene.add(g); return g;
+  g.position.set(x, 0, z); scene.add(g); placeholders.trees.push(g); return g;
 }
-makeTree(-6.6, -4.8, 1.15); makeTree(6.7, -4.6, 1.1); makeTree(7.6, 2.8, 0.85);
+for (const [x, z, sc] of VENUE.trees) makeTree(x, z, sc * 1.1);
 // pots with geraniums near railing
 {
-  const pot = std(0xb5643a), fl = std(0xd8263a, { flatShading: true });
-  for (const x of [-4.4, -0.9, 2.7, 5.4]) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.2, 0.45, 8), pot); p.position.set(x, 0.22, SEA_EDGE_Z + 0.75); p.castShadow = true; scene.add(p);
-    const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 0), fl); f.position.set(x, 0.6, SEA_EDGE_Z + 0.75); scene.add(f);
+  const potMat = std(0xb8613a, { roughness: 0.9 }), fl = std(0xd8183a, { roughness: 0.6 }), leafMat = std(0x3f6e2a, { roughness: 0.8 });
+  const leafGeo = new THREE.IcosahedronGeometry(0.15, 1), flowerGeo = new THREE.IcosahedronGeometry(0.065, 1); let sharedPot = null;
+  for (const x of VENUE.pots) {
+    // no pot model in the transfer: terracotta lathe pot + leaf mound + geranium umbels (procedural)
+    const z0 = SEA_EDGE_Z + 0.75, rnd = mulberry(Math.round(x * 31 + 5));
+    const prof = [[0.0, 0], [0.17, 0], [0.2, 0.04], [0.25, 0.4], [0.28, 0.42], [0.28, 0.48], [0.24, 0.48], [0.22, 0.45], [0, 0.45]].map(([r, y]) => new THREE.Vector2(r, y));
+    const p = new THREE.Mesh(sharedPot || (sharedPot = new THREE.LatheGeometry(prof, 14)), potMat); p.position.set(x, 0, z0); p.castShadow = true; p.receiveShadow = true; scene.add(p);
+    for (let k = 0; k < 5; k++) { const l = new THREE.Mesh(leafGeo, leafMat); const a = k / 5 * 6.28 + rnd(); l.position.set(x + Math.cos(a) * 0.13, 0.5 + rnd() * 0.06, z0 + Math.sin(a) * 0.13); l.scale.set(1, 0.55, 1); l.castShadow = true; scene.add(l); }
+    for (let k = 0; k < 7; k++) { const a = rnd() * 6.28, r = rnd() * 0.2; const f = new THREE.Mesh(flowerGeo, fl); f.position.set(x + Math.cos(a) * r, 0.66 + rnd() * 0.14, z0 + Math.sin(a) * r); scene.add(f); }
   }
 }
 // samovar counter (wood) + awning
@@ -194,7 +273,7 @@ const counter = new THREE.Group();
   const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.06, 2.3), std(0x5a2f18, { roughness: 0.5 })); top.position.y = 0.98; top.receiveShadow = true; counter.add(top);
   const tile = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.6), std(0xffffff, { map: checkerTexture() }));
   tile.position.set(0.505, 0.55, 0); tile.rotation.y = Math.PI / 2; counter.add(tile);
-  counter.position.copy(SAMOVAR_POS); scene.add(counter);
+  counter.position.copy(SAMOVAR_POS); scene.add(counter); placeholders.counter.push(box, top, tile);
   // awning
   // back wall with sign instead of an awning (awning hid the owner from the high camera)
   const wall = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.2, 2.6), std(0xe8d9bf)); wall.position.set(SAMOVAR_POS.x - 1.55, 1.1, SAMOVAR_POS.z); wall.castShadow = wall.receiveShadow = true; wall.userData.camBlock = true; scene.add(wall);
@@ -220,6 +299,55 @@ const [waiterG, ownerG, tableSrc, samovarSrc, traySrc, teapotSrc, easelSrc, chai
 const waiterSrc = waiterG && waiterG.scene, ownerSrc = ownerG && ownerG.scene;
 const custBases = (await Promise.all(CUSTOMER_MODELS.map(m => loadG(m.url).then(g => g && { ...m, gltf: g })))).filter(Boolean);
 
+// ---------- environment assets (Meshy, decimated): replace the primitive placeholders when they load ----------
+const ENV = Object.fromEntries(await Promise.all(['env_tree', 'env_railing', 'env_lamp', 'env_awning', 'env_bench', 'env_bar'].map(n => load(n).then(g => [n, g]))));
+const topFade = []; // materials made see-through in the overview camera so they don't hide the game
+// one InstancedMesh per sub-mesh: N copies cost one draw call each
+function instanceGLB(src, mats4, { shadow = true, block = false } = {}) {
+  const out = []; src.updateMatrixWorld(true);
+  src.traverse(o => {
+    if (!o.isMesh) return;
+    const im = new THREE.InstancedMesh(o.geometry, o.material, mats4.length);
+    mats4.forEach((m, i) => im.setMatrixAt(i, m.clone().multiply(o.matrixWorld)));
+    im.castShadow = shadow; im.receiveShadow = true; im.computeBoundingSphere(); scene.add(im); out.push(im);
+    if (block) im.userData.camBlock = true;
+  });
+  return out;
+}
+const TRS = (x, y, z, yaw = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(s, s, s));
+const envTris = {};
+function countTris(o) { let n = 0; o.traverse(m => { if (m.isMesh) n += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; }); return n; }
+if (ENV.env_tree) { // çınar: 8 m, slight random yaw; trunk blocks the camera, canopy fades in overview
+  placeholders.trees.forEach(t => t.visible = false);
+  instanceGLB(ENV.env_tree, VENUE.trees.map(([x, z, s], i) => TRS(x, 0, z, i * 2.1, s)), { block: true }).forEach(im => { im.material.transparent = true; topFade.push(im.material); });
+  envTris.tree = countTris(ENV.env_tree);
+}
+if (ENV.env_railing) { // 3.24 m x 1 m section, tiled along the waterfront
+  placeholders.railing.forEach(r => r.visible = false);
+  const box = new THREE.Box3().setFromObject(ENV.env_railing), L = box.max.x - box.min.x, R0 = VENUE.railing;
+  const n = Math.ceil((R0.x1 - R0.x0) / L), ms = [];
+  for (let i = 0; i < n; i++) ms.push(TRS(R0.x0 + L * (i + 0.5), 0, R0.z));
+  instanceGLB(ENV.env_railing, ms, { shadow: false }); /* thin ironwork: shadow pass not worth 25k tris */ envTris.railing = countTris(ENV.env_railing) + ' ×' + n;
+}
+if (ENV.env_lamp) { instanceGLB(ENV.env_lamp, VENUE.lamps.map(([x, z], i) => TRS(x, 0, z, i, 0.85)), { shadow: false }); envTris.lamp = countTris(ENV.env_lamp) + ' ×' + VENUE.lamps.length; }
+if (ENV.env_bench) { instanceGLB(ENV.env_bench, VENUE.benches.map(([x, z, y]) => TRS(x, 0, z, y))); envTris.bench = countTris(ENV.env_bench) + ' ×' + VENUE.benches.length; }
+let counterTopY = 1.01;
+if (ENV.env_bar) { // carved counter, long side along z, front to the garden (+x); 1 m tall
+  placeholders.counter.forEach(m => m.visible = false);
+  const bar = prep(ENV.env_bar); const bb = new THREE.Box3().setFromObject(bar);
+  const k = 1.0 / (bb.max.y - bb.min.y); bar.scale.setScalar(k * 1.1); bar.rotation.y = Math.PI / 2;
+  bar.position.set(SAMOVAR_POS.x - 0.05, 0, SAMOVAR_POS.z); scene.add(bar); bar.updateMatrixWorld(true);
+  bar.traverse(o => { if (o.isMesh) o.userData.camBlock = true; });
+  // find the working surface height under the samovar spot
+  const rc = new THREE.Raycaster(new THREE.Vector3(SAMOVAR_POS.x, 3, SAMOVAR_POS.z - 0.4), new THREE.Vector3(0, -1, 0));
+  const hit = rc.intersectObject(bar, true)[0]; if (hit && hit.point.y > 0.7 && hit.point.y < 1.3) counterTopY = hit.point.y + 0.005;
+  envTris.counter = countTris(bar); window.__bar = bar;
+}
+if (ENV.env_awning && VENUE.awning) { // striped awning on posts, standing over the counter area
+  const aw = prep(ENV.env_awning); aw.scale.setScalar(1.2); aw.rotation.y = Math.PI / 2; aw.position.set(SAMOVAR_POS.x - 0.35, 0, SAMOVAR_POS.z); scene.add(aw);
+  aw.traverse(o => { if (o.isMesh) { o.material.transparent = true; topFade.push(o.material); } });
+  envTris.awning = countTris(aw);
+}
 // ---------- props ----------
 const checker = checkerTexture();
 const tables = [];
@@ -260,7 +388,7 @@ function makeChair() {
   g.traverse(o => { if (o.isMesh) o.castShadow = true; }); return g;
 }
 // samovar on counter
-const samovarGroup = new THREE.Group(); samovarGroup.position.set(SAMOVAR_POS.x, 1.01, SAMOVAR_POS.z - 0.4);
+const samovarGroup = new THREE.Group(); samovarGroup.position.set(SAMOVAR_POS.x, counterTopY, SAMOVAR_POS.z - 0.4);
 if (samovarSrc) { const s = prep(samovarSrc.clone()); s.rotation.y = Math.PI / 2; samovarGroup.add(s); }
 else {
   const brass = std(0xc8932e, { metalness: 0.9, roughness: 0.3 });
@@ -268,12 +396,12 @@ else {
   const pot = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), brass); pot.position.y = 0.55; samovarGroup.add(pot);
 }
 scene.add(samovarGroup);
-if (teapotSrc) { const t = prep(teapotSrc.clone()); t.position.set(SAMOVAR_POS.x + 0.1, 1.01, SAMOVAR_POS.z + 0.45); t.rotation.y = Math.PI / 2; scene.add(t); }
+if (teapotSrc) { const t = prep(teapotSrc.clone()); t.position.set(SAMOVAR_POS.x + 0.1, counterTopY, SAMOVAR_POS.z + 0.45); t.rotation.y = Math.PI / 2; scene.add(t); }
 let trayModel;
 if (traySrc) { trayModel = prep(traySrc.clone()); }
 else { trayModel = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 16), std(0xc8932e, { metalness: 0.9, roughness: 0.3 })); }
 // spare tray displayed on counter
-{ const t = trayModel.clone(); t.position.set(SAMOVAR_POS.x + 0.15, 1.01, SAMOVAR_POS.z + 0.95); scene.add(t); }
+{ const t = trayModel.clone(); t.position.set(SAMOVAR_POS.x + 0.15, counterTopY, SAMOVAR_POS.z + 0.95); scene.add(t); }
 if (easelSrc) { const e = prep(easelSrc.clone()); e.position.set(6.3, 0, 4.4); e.rotation.y = -Math.PI / 2.8 + Math.PI; scene.add(e); }
 // samovar hit area (counter + samovar + owner)
 const samovarHit = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.2, 2.8), new THREE.MeshBasicMaterial({ visible: false }));
@@ -329,13 +457,14 @@ const handTray = trayModel.clone(); handTray.visible = false; scene.add(handTray
 const _hp = new THREE.Vector3(), _hq = new THREE.Vector3();
 function palm(bone, out) { bone.getWorldPosition(out); const tip = bone.children[0]; if (tip) { tip.getWorldPosition(_hq); out.lerp(_hq, 0.5); } return out; }
 const _ho = new THREE.Vector3();
+const TRAY_LIFT = 0.035;
 function placeHandTray() {
   if (handBone && waiterAnim.ok) {
     // palm is ~8cm along the hand bone; tray stays level and turns with the waiter
     palm(handBone, _hp);
     if (W.trayHolder === 'owner' && ownerHand) { palm(ownerHand, _hp); }
     else if (W.trayHolder === 'transfer' && ownerHand) { palm(ownerHand, _ho); _hp.lerpVectors(_ho, palm(handBone, _hp).clone(), W.transferK || 0); }
-    handTray.position.set(_hp.x, _hp.y - 0.02, _hp.z);
+    handTray.position.set(_hp.x, _hp.y + TRAY_LIFT, _hp.z); // tray rests on top of the palm/fingers instead of cutting through them
   } else {
     const o = waiter.outer; _hp.set(0.12, 1.08 + waiter.inner.position.y, 0.3).applyAxisAngle(new THREE.Vector3(0, 1, 0), o.rotation.y).add(o.position); handTray.position.copy(_hp);
   }
@@ -422,11 +551,12 @@ function tintCloth(mat, tint, belowY) {
   mat.customProgramCacheKey = () => 'tint' + tint + '_' + belowY;
 }
 function makeRiggedCustomer(rnd) {
-  const b = custBases[Math.floor(rnd() * custBases.length)];
+  let r = rnd() * custBases.reduce((a, c) => a + (c.weight || 1), 0), b = custBases[0];
+  for (const c of custBases) { r -= c.weight || 1; if (r <= 0) { b = c; break; } }
   const model = SkeletonUtils.clone(b.gltf.scene);
   const tint = CLOTH_TINTS[Math.floor(rnd() * CLOTH_TINTS.length)];
   model.traverse(o => {
-    if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; o.material = o.material.clone(); tintCloth(o.material, tint, b.clothBelowY); }
+    if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; o.material = o.material.clone(); if (b.tint !== false) tintCloth(o.material, tint, b.clothBelowY); }
   });
   const g = new THREE.Group(); g.add(model);
   g.scale.setScalar(THREE.MathUtils.lerp(b.scale[0], b.scale[1], rnd()));
@@ -456,7 +586,7 @@ function spawnCustomer(forcePair) {
   const pair = forcePair !== undefined ? forcePair : rng() < 0.45;
   const seatIdx = pair ? [0, 1] : [Math.floor(rng() * 2)];
   const party = { table: t, members: [], need: seatIdx.length, served: 0, state: 'arriving', patience: 0,
-    maxPatience: Math.max(14, 26 - stats.served * 0.4) * (pair ? 1.3 : 1), drinkT: 0, bubble: null, chatT: 1.5 + rng() * 2, speaker: 0, said: new Set() };
+    maxPatience: PATIENCE_SCALE * Math.max(14, 26 - stats.served * 0.4) * (pair ? 1.3 : 1), drinkT: 0, bubble: null, chatT: 1.5 + rng() * 2, speaker: 0, said: new Set() };
   seatIdx.forEach((si, n) => {
     const seat = t.seats[si]; const p = makeCustomerBody(rng); if (p.collider) camColliders.push(p.collider);
     p.group.position.copy(ENTRANCE).add(new THREE.Vector3(n * 0.7, 0, n * 0.35));
@@ -534,7 +664,7 @@ canvas.addEventListener('pointermove', e => {
     joyKnob.style.transform = `translate(calc(-50% + ${jx}px), calc(-50% + ${jy}px))`;
   } else if (p.role === 'look') {
     // sensitivity relative to screen size: a full-width swipe turns ~200°
-    viewYaw -= dx / innerWidth * 3.5; viewPitch = THREE.MathUtils.clamp(viewPitch - dy / innerHeight * 1.8, PITCH_MIN, PITCH_MAX);
+    viewYaw -= dx / innerWidth * 3.5 * SETTINGS.sens; viewPitch = THREE.MathUtils.clamp(viewPitch - dy / innerHeight * 1.8 * SETTINGS.sens, PITCH_MIN, PITCH_MAX);
   }
 });
 function endPointer(e, cancelled) {
@@ -549,6 +679,7 @@ addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; if (e.key.t
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 function cycleCam() { camMode = CAM_MODES[(CAM_MODES.indexOf(camMode) + 1) % 3]; applyCamMode(); }
 function applyCamMode() {
+  for (const m of topFade) { m.opacity = camMode === 'top' ? 0.28 : 1; m.depthWrite = camMode !== 'top'; }
   document.getElementById('camBtn').textContent = CAM_LABEL[camMode];
   document.getElementById('joyHint').classList.toggle('hidden', camMode === 'top');
   document.getElementById('hint').textContent = camMode === 'top'
@@ -599,7 +730,7 @@ function pushOut(p, radius, ignoreTable) {
 }
 
 // ---------- game logic ----------
-let started = false, gameOver = false, spawnTimer = 2, elapsed = 0;
+let started = false, gameOver = false, spawnTimer = 2, elapsed = 0, inMenu = false;
 function arrive() {
   const a = W.action; W.action = null; if (!a) return;
   if (a.type === 'samovar') {
@@ -871,12 +1002,12 @@ function turnHead(c) { // world-space yaw/nod applied on top of the animated hea
 }
 function g_standUp(c) { if (c.rig) { c.anim.setOverride(null); c.headYaw = c.headPitch = 0; c.lids.forEach(l => l.visible = false); return; } c.body.position.y = 0; c.body.rotation.x = 0; c.arms.forEach(a => { a.rotation.set(0, 0, 0); }); for (const l of c.legs) { l.hip.rotation.x = 0; l.knee.rotation.x = 0; } }
 function endGame() {
-  gameOver = true;
+  gameOver = true; PROFILE.money += stats.money; PROFILE.xp += stats.served * 10; saveProfile();
   const ov = $('overlay'); ov.classList.remove('hidden'); ov.style.display = 'flex';
   ov.querySelector('.card').innerHTML = `<h1>Gün Bitti</h1><p class="sub">Çok müşteri kaçırdın!</p>
     <p style="font-size:20px">🪙 Kazanılan Para: <b>${stats.money} ₺</b><br>😊 Memnun müşteri: <b>${stats.served}</b></p>
-    <button id="againBtn" style="font-size:22px;padding:12px 36px;border:0;border-radius:999px;background:#b3261e;color:#fff;font-weight:700">Tekrar Oyna</button>`;
-  $('againBtn').onclick = () => location.reload();
+    <button id="againBtn" style="font-size:22px;padding:12px 36px;border:0;border-radius:999px;background:#b3261e;color:#fff;font-weight:700">Ana Menü</button>`;
+  $('againBtn').onclick = () => location.reload(); // reload lands in the lobby with the banked money/XP
 }
 
 // ---------- camera fit ----------
@@ -915,6 +1046,11 @@ const _v = new THREE.Vector3(), _r = new THREE.Vector3(), _s = new THREE.Vector3
 const camPivot = new THREE.Vector3(), camRay = new THREE.Raycaster(); const OTS_DIST = 2.6; let camCurDist = OTS_DIST;
 const camColliders = []; scene.traverse(o => { if (o.isMesh && o.userData.camBlock) camColliders.push(o); });
 function updateCamera(dt, snap) {
+  if (inMenu) { // lobby: slow orbit around the idle waiter
+    const a = 0.75 + Math.sin(elapsed * 0.07) * 0.85, r = 3.3; // slow back-and-forth arc in front of him (a full circle would clip the furniture)
+    camera.position.set(W.pos.x + Math.sin(a) * r, 1.9 + Math.sin(elapsed * 0.23) * 0.12, W.pos.z + Math.cos(a) * r);
+    camera.lookAt(W.pos.x - Math.cos(a) * 0.9, 1.15, W.pos.z + Math.sin(a) * 0.9); return;
+  }
   if (window.__camOverride) { const o = window.__camOverride; camera.position.set(...o.pos); camera.lookAt(...o.look); return; }
   if (camMode !== 'top') {
     const f = _v.set(Math.sin(viewYaw) * Math.cos(viewPitch), Math.sin(viewPitch), Math.cos(viewYaw) * Math.cos(viewPitch));
@@ -956,7 +1092,55 @@ updateCamera(0, true);
 
 // ---------- start ----------
 $('loading').classList.add('hidden'); $('startBtn').classList.remove('hidden');
+// ---------- lobby / main menu ----------
+function menuStats() {
+  const lv = levelOf(PROFILE.xp);
+  $('mLevel').textContent = lv; $('mXp').style.width = (PROFILE.xp % 100) + '%'; $('mXpTxt').textContent = (PROFILE.xp % 100) + ' / 100 XP';
+  $('mMoney').textContent = PROFILE.money.toLocaleString('tr-TR');
+  $('mVenue').textContent = (VENUES.find(v => v.id === PROFILE.venue) || VENUES[0]).name;
+}
+const SHOP = [
+  { id: 'tepsi', name: 'Gümüş Tepsi', desc: 'Tepside 4 çay', price: 250, icon: '🍽️' },
+  { id: 'bardak', name: 'İnce Belli Set', desc: '+%10 bahşiş', price: 400, icon: '🫖' },
+  { id: 'ayakkabi', name: 'Rahat Ayakkabı', desc: '+%15 yürüme hızı', price: 600, icon: '👞' },
+  { id: 'semaver', name: 'Bakır Semaver', desc: 'Demleme 2 kat hızlı', price: 900, icon: '⚱️' },
+];
+function showPanel(id) {
+  document.querySelectorAll('#menu .mBtn').forEach(b => b.classList.toggle('on', b.dataset.p === id));
+  const P = $('mPanel'); P.className = 'mPanel' + (id ? ' open' : ''); if (!id) { P.innerHTML = ''; return; }
+  const lv = levelOf(PROFILE.xp);
+  if (id === 'venues') P.innerHTML = '<h2>MEKANLAR</h2><div class="cards">' + VENUES.map(v => {
+    const locked = v.locked || lv < v.level, sel = PROFILE.venue === v.id;
+    return `<div class="vcard v-${v.id}${locked ? ' locked' : ''}${sel ? ' sel' : ''}" data-v="${v.id}"><div class="vart"></div>
+      <div class="vinfo"><b>${v.name}</b><span>${v.desc}</span></div>
+      <div class="vtag">${locked ? '🔒 Seviye ' + v.level : sel ? '✔ SEÇİLİ' : 'SEÇ'}</div></div>`; }).join('') + '</div>';
+  if (id === 'shop') P.innerHTML = '<h2>MAĞAZA</h2><div class="shop">' + SHOP.map(it => `<div class="sitem"><div class="sic">${it.icon}</div><b>${it.name}</b><span>${it.desc}</span>
+      <button class="sbuy" ${PROFILE.money < it.price ? 'disabled' : ''} data-i="${it.id}">🪙 ${it.price}</button></div>`).join('') + '</div><p class="soon">Satın alımlar yakında — şimdilik sadece vitrin.</p>';
+  if (id === 'settings') {
+    P.innerHTML = `<h2>AYARLAR</h2><div class="srow"><span>Grafik kalitesi</span><div class="seg">${['dusuk', 'orta', 'yuksek'].map(q => `<button data-q="${q}" class="${SETTINGS.quality === q ? 'on' : ''}">${{ dusuk: 'Düşük', orta: 'Orta', yuksek: 'Yüksek' }[q]}</button>`).join('')}</div></div>
+      <div class="srow"><span>Bakış hassasiyeti</span><input id="sSens" type="range" min="0.4" max="2" step="0.1" value="${SETTINGS.sens}"><b id="sSensV">${SETTINGS.sens.toFixed(1)}</b></div>
+      <div class="srow"><span>İlerlemeyi sıfırla</span><button id="sReset" class="danger">Sıfırla</button></div>
+      <p class="soon">Grafik değişikliği oyunu yeniden yükler.</p>`;
+    P.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { SETTINGS.quality = b.dataset.q; localStorage.setItem('cay_settings', JSON.stringify(SETTINGS)); location.reload(); });
+    $('sSens').oninput = (e) => { SETTINGS.sens = +e.target.value; $('sSensV').textContent = SETTINGS.sens.toFixed(1); localStorage.setItem('cay_settings', JSON.stringify(SETTINGS)); };
+    $('sReset').onclick = () => { localStorage.removeItem('cay_profile'); location.reload(); };
+  }
+  P.querySelectorAll('.vcard').forEach(c => c.onclick = () => {
+    const v = VENUES.find(x => x.id === c.dataset.v);
+    if (v.locked || lv < v.level) { toast(`🔒 ${v.name} — Seviye ${v.level} gerekli`, 'rgba(60,60,70,.95)'); return; }
+    PROFILE.venue = v.id; saveProfile(); menuStats(); showPanel('venues');
+  });
+}
+document.querySelectorAll('#menu .mBtn').forEach(b => b.onclick = () => {
+  if (b.dataset.p === 'play') { $('startBtn').onclick(); return; }
+  showPanel($('mPanel').classList.contains('open') && b.classList.contains('on') ? null : b.dataset.p);
+});
+function openMenu() {
+  inMenu = true; document.body.classList.add('inMenu'); $('overlay').style.display = 'none'; $('menu').classList.remove('hidden');
+  W.pos.set(-0.9, 0, 1.6); W.yaw = 0.75; waiter.outer.rotation.y = 0.75; menuStats(); showPanel(null);
+}
 $('startBtn').onclick = () => {
+  inMenu = false; document.body.classList.remove('inMenu'); $('menu').classList.add('hidden'); W.pos.set(-3.5, 0, 2.5); viewYaw = W.yaw = 0.5;
   started = true; $('overlay').style.display = 'none'; spawnTimer = 1.5; updateHud();
   if (isMobile) {
     const el = document.documentElement, rq = el.requestFullscreen || el.webkitRequestFullscreen;
@@ -965,8 +1149,9 @@ $('startBtn').onclick = () => {
   setTimeout(() => $('hint').classList.add('fade'), 9000);
 };
 applyCamMode();
-if (new URLSearchParams(location.search).has('autostart')) $('startBtn').onclick();
-window.__game = { W, customers, tables, stats, spawnCustomer, handTray, seatAll: () => customers.forEach(c => { if (c.state === 'walkIn') { c.path = [c.path[c.path.length - 1]]; c.group.position.copy(c.path[0]); } }), tap: handleTap, parties, serveSpot, flyGlass, camColliders: () => camColliders, clearParties: () => [...parties].forEach(P => leaveParty(P, false)), cycleCam, joy, waiterAnim, ownerAnim, setView: (y, p) => { viewYaw = y; viewPitch = p; }, startBrew, serveTable, get camMode() { return camMode; }, tapWorld: (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); handleTap((v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight); } };
+if (new URLSearchParams(location.search).has('autostart')) $('startBtn').onclick(); else openMenu();
+window.__scene = scene; window.__ferry = ferry;
+window.__game = { renderer, envTris, custBases: () => custBases.map(b => b.url), W, customers, tables, stats, spawnCustomer, handTray, seatAll: () => customers.forEach(c => { if (c.state === 'walkIn') { c.path = [c.path[c.path.length - 1]]; c.group.position.copy(c.path[0]); } }), tap: handleTap, parties, serveSpot, flyGlass, camColliders: () => camColliders, clearParties: () => [...parties].forEach(P => leaveParty(P, false)), cycleCam, joy, waiterAnim, ownerAnim, setView: (y, p) => { viewYaw = y; viewPitch = p; }, startBrew, serveTable, get camMode() { return camMode; }, tapWorld: (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); handleTap((v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight); } };
 
 // ---------- loop ----------
 const clock = new THREE.Clock();
@@ -982,13 +1167,14 @@ window.__advance = (sec) => { for (let t = 0; t < sec; t += 1 / 30) tick(1 / 30)
 function tick(dt) {
   elapsed += dt;
   seaUniforms.uTime.value = elapsed;
-  ferry.position.x += dt * 1.2; if (ferry.position.x > 45) ferry.position.x = -45;
-  ferry.position.y = -0.4 + Math.sin(elapsed * 1.3) * 0.04;
+  ferry.position.x += dt * 2.2; if (ferry.position.x > 70) ferry.position.x = -70;
+  ferry.position.y = -0.35 + Math.sin(elapsed * 1.1) * 0.06; ferry.rotation.z = Math.sin(elapsed * 0.8) * 0.012;
+  if (ferry.userData.flag) ferry.userData.flag.rotation.y = Math.sin(elapsed * 4) * 0.25;
   if (started && !gameOver) {
     spawnTimer -= dt;
     if (spawnTimer <= 0) { spawnCustomer(); spawnTimer = Math.max(3.5, 9 - stats.served * 0.25) + rng() * 3; }
     updateWaiter(dt); updateCustomers(dt);
-  }
+  } else if (inMenu) { waiter.outer.rotation.y = W.yaw; if (waiterAnim.ok) waiterAnim.update(dt, 0, false); handTray.visible = false; }
   // owner idle: breathe + look at waiter
   if (ownerAnim.ok) ownerAnim.update(dt, 0, false); else owner.inner.scale.y = 1 + Math.sin(elapsed * 1.6) * 0.005;
   const look = Math.atan2(W.pos.x - owner.outer.position.x, W.pos.z - owner.outer.position.z);

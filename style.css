@@ -58,3 +58,59 @@ html,body{margin:0;height:100%;overflow:hidden;background:#e9b98a;font-family:sy
 .chat:after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-bottom:0;border-top-color:#fff}
 @keyframes pop{from{transform:translate(-50%,-100%) scale(.6);opacity:0}to{transform:translate(-50%,-100%) scale(1);opacity:1}}
 .bubble .ord{white-space:nowrap}
+
+/* ---------- lobby / main menu (PUBG/CoD-style dark translucent) ---------- */
+body.inMenu #hud, body.inMenu #trayHud, body.inMenu #camBtn, body.inMenu #joyBase, body.inMenu #joyHint, body.inMenu #lookHint, body.inMenu #hint, body.inMenu #bubbles{display:none!important}
+#menu{position:fixed;inset:0;z-index:9;color:#f3ede4;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:linear-gradient(90deg,rgba(8,10,14,.82) 0%,rgba(8,10,14,.45) 30%,rgba(8,10,14,0) 55%),linear-gradient(0deg,rgba(8,10,14,.6),rgba(8,10,14,0) 22%)}
+#menu.hidden{display:none}
+.mTop{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:12px 22px;
+  background:linear-gradient(rgba(6,8,12,.85),rgba(6,8,12,.0));}
+.mLogo{font-family:Georgia,serif;font-weight:700;font-size:26px;letter-spacing:3px;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.mLogo span{color:#e8b04a}.mLogo small{display:block;font:600 10px system-ui;letter-spacing:4px;color:#b9b2a6;margin-top:4px;text-transform:uppercase}
+.mStats{display:flex;gap:12px;align-items:center}
+.mLv{display:flex;align-items:center;gap:8px;background:rgba(20,24,30,.7);border:1px solid rgba(255,255,255,.12);padding:5px 12px 5px 5px;border-radius:6px;backdrop-filter:blur(6px)}
+.mLvBadge{width:38px;height:38px;border-radius:4px;background:linear-gradient(135deg,#e8b04a,#a8681c);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#1a1208;line-height:1}
+.mLvBadge small{font-size:8px;font-weight:800}.mLvBadge b{font-size:18px}
+.mXpWrap{display:flex;flex-direction:column;gap:3px;font-size:10px;color:#b9b2a6}
+.mXpBar{width:120px;height:6px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden}.mXpBar i{display:block;height:100%;background:linear-gradient(90deg,#e8b04a,#ffd98a)}
+.mCoin{background:rgba(20,24,30,.7);border:1px solid rgba(255,255,255,.12);padding:9px 14px;border-radius:6px;font-size:15px;backdrop-filter:blur(6px)}
+.mCoin b{color:#ffd98a}
+.mLeft{position:absolute;left:22px;top:50%;transform:translateY(-42%);display:flex;flex-direction:column;gap:8px;width:230px}
+.mBtn{display:flex;align-items:center;gap:12px;text-align:left;font:800 17px system-ui;letter-spacing:2px;color:#e9e3d8;padding:12px 16px;border-radius:4px;
+  background:rgba(18,22,28,.62);border:1px solid rgba(255,255,255,.08);border-left:3px solid transparent;backdrop-filter:blur(6px);cursor:pointer;transition:.15s}
+.mBtn span{width:22px;text-align:center;font-size:16px}
+.mBtn:hover,.mBtn.on{background:rgba(232,176,74,.16);border-left-color:#e8b04a;color:#fff}
+.mBtn.play{font-size:24px;padding:16px 18px;color:#1a1208;background:linear-gradient(90deg,#f0c060,#d4902c);border:0;box-shadow:0 6px 24px rgba(232,150,40,.35)}
+.mBtn.play:hover{filter:brightness(1.08)}
+.mPanel{position:absolute;left:272px;top:66px;bottom:44px;width:min(560px,calc(100vw - 300px));display:none;padding:14px 18px;border-radius:6px;
+  background:rgba(12,15,20,.78);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(10px);overflow:auto}
+.mPanel.open{display:block}
+.mPanel h2{margin:0 0 10px;font:800 15px system-ui;letter-spacing:4px;color:#e8b04a}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.vcard{position:relative;border-radius:5px;overflow:hidden;background:#1a1f27;border:1px solid rgba(255,255,255,.1);cursor:pointer;min-height:150px;display:flex;flex-direction:column}
+.vcard.sel{border-color:#e8b04a;box-shadow:0 0 0 1px #e8b04a inset}
+.vart{flex:1;min-height:84px;background-size:cover;background-position:center}
+.v-bogaz .vart{background:linear-gradient(180deg,#f3b779 0%,#f39a5c 38%,#2f6f86 39%,#174b63 100%)}
+.v-bogaz .vart::after{content:"🕌  ⛴️";position:absolute;left:10px;top:30px;font-size:24px}
+.v-kapadokya .vart{background:linear-gradient(180deg,#f7c9a0,#e9a07a 55%,#b56d4a 56%,#8e4f34)}
+.v-kapadokya .vart::after{content:"🎈 🎈";position:absolute;left:10px;top:20px;font-size:24px}
+.v-karadeniz .vart{background:linear-gradient(180deg,#b9c9c4,#8fa9a0 50%,#3f6b45 51%,#244a2d)}
+.v-karadeniz .vart::after{content:"🌲🌲 ☁️";position:absolute;left:10px;top:24px;font-size:22px}
+.vinfo{padding:7px 9px 26px;display:flex;flex-direction:column;gap:2px}.vinfo b{font-size:13px}.vinfo span{font-size:10.5px;color:#a9a294}
+.vtag{position:absolute;bottom:7px;left:9px;font:800 10px system-ui;letter-spacing:1.5px;color:#e8b04a}
+.vcard.locked .vart{filter:grayscale(.85) brightness(.55)}.vcard.locked .vtag{color:#c9c2b6}
+.vcard.locked::before{content:"🔒";position:absolute;right:8px;top:6px;font-size:18px;z-index:2}
+.shop{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.sitem{background:#1a1f27;border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:10px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:3px}
+.sic{font-size:30px}.sitem b{font-size:12px}.sitem span{font-size:10px;color:#a9a294;min-height:26px}
+.sbuy{margin-top:4px;border:0;border-radius:3px;padding:6px 10px;font:800 12px system-ui;background:linear-gradient(90deg,#f0c060,#d4902c);color:#1a1208}
+.sbuy:disabled{background:#3a3f48;color:#8b8578}
+.soon{font-size:11px;color:#8b8578;margin:10px 0 0}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:14px}
+.srow input{flex:1}.seg{display:flex;gap:4px}.seg button,.danger{border:1px solid rgba(255,255,255,.15);background:#1f252e;color:#ddd;padding:6px 12px;border-radius:3px;font:700 12px system-ui}
+.seg button.on{background:#e8b04a;color:#1a1208;border-color:#e8b04a}.danger{background:#5a1d1a;border-color:#8a2b25}
+.mBottom{position:absolute;left:22px;bottom:12px;font-size:12px;color:#b9b2a6;letter-spacing:1px}
+@media (max-height:500px){ .mLeft{width:200px;gap:6px;left:16px} .mBtn{padding:9px 14px;font-size:15px} .mBtn.play{font-size:20px;padding:12px 16px}
+  .mPanel{left:232px;top:58px;bottom:36px;width:calc(100vw - 252px)} .mLogo{font-size:21px} .vcard{min-height:130px} .vart{min-height:68px} }
+#toast{z-index:12}
