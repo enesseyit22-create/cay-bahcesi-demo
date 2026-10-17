@@ -310,18 +310,36 @@ function makeTree(x, z, s = 1) {
   g.position.set(x, 0, z); scene.add(g); placeholders.trees.push(g); return g;
 }
 for (const [x, z, sc] of VENUE.trees) makeTree(x, z, sc * 1.1);
-// pots with geraniums near railing
+// pots with geraniums near railing — procedural (no pot model in the transfer), all pots share 4 instanced meshes
 {
-  const potMat = std(0xb8613a, { roughness: 0.9 }), fl = std(0xd8183a, { roughness: 0.6 }), leafMat = std(0x3f6e2a, { roughness: 0.8 });
-  const leafGeo = new THREE.IcosahedronGeometry(0.15, 1), flowerGeo = new THREE.IcosahedronGeometry(0.065, 1); let sharedPot = null;
-  for (const x of VENUE.pots) {
-    // no pot model in the transfer: terracotta lathe pot + leaf mound + geranium umbels (procedural)
-    const z0 = SEA_EDGE_Z + 0.75, rnd = mulberry(Math.round(x * 31 + 5));
-    const prof = [[0.0, 0], [0.17, 0], [0.2, 0.04], [0.25, 0.4], [0.28, 0.42], [0.28, 0.48], [0.24, 0.48], [0.22, 0.45], [0, 0.45]].map(([r, y]) => new THREE.Vector2(r, y));
-    const p = new THREE.Mesh(sharedPot || (sharedPot = new THREE.LatheGeometry(prof, 14)), potMat); p.position.set(x, 0, z0); p.castShadow = true; p.receiveShadow = true; scene.add(p);
-    for (let k = 0; k < 5; k++) { const l = new THREE.Mesh(leafGeo, leafMat); const a = k / 5 * 6.28 + rnd(); l.position.set(x + Math.cos(a) * 0.13, 0.5 + rnd() * 0.06, z0 + Math.sin(a) * 0.13); l.scale.set(1, 0.55, 1); l.castShadow = true; scene.add(l); }
-    for (let k = 0; k < 7; k++) { const a = rnd() * 6.28, r = rnd() * 0.2; const f = new THREE.Mesh(flowerGeo, fl); f.position.set(x + Math.cos(a) * r, 0.66 + rnd() * 0.14, z0 + Math.sin(a) * r); scene.add(f); }
-  }
+  const potMat = std(0xb5603a, { roughness: 0.92 });
+  const prof = [[0.0, 0.02], [0.16, 0.02], [0.17, 0.0], [0.2, 0.0], [0.21, 0.03], [0.26, 0.36], [0.255, 0.38], [0.29, 0.39], [0.3, 0.47], [0.27, 0.48], [0.25, 0.44], [0, 0.42]].map(([r, y]) => new THREE.Vector2(r, y));
+  const potGeo = new THREE.LatheGeometry(prof, 18);
+  // geranium leaf: round scalloped disc with the typical darker zonal ring
+  const leafTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    g.translate(64, 64); g.beginPath(); for (let k = 0; k <= 72; k++) { const t = k / 72 * Math.PI * 2, r = 56 + 5 * Math.sin(t * 9); g.lineTo(Math.cos(t) * r, Math.sin(t) * r); }
+    g.fillStyle = '#4f8a35'; g.fill(); g.strokeStyle = 'rgba(60,40,20,.55)'; g.lineWidth = 9; g.beginPath(); g.arc(0, 0, 32, 0, 7); g.stroke();
+    g.strokeStyle = 'rgba(200,230,170,.35)'; g.lineWidth = 2; for (let k = 0; k < 7; k++) { g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(k * 0.9) * 50, Math.sin(k * 0.9) * 50); g.stroke(); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75 });
+  const leafGeo = new THREE.CircleGeometry(0.075, 10);
+  const flowerMat = std(0xd9142f, { roughness: 0.55 }), flowerGeo = new THREE.IcosahedronGeometry(0.022, 0); // florets: umbels of ~14 tiny blossoms
+  const soil = new THREE.Mesh(new THREE.CircleGeometry(0.25, 14), std(0x3b2a1e)); soil.rotation.x = -Math.PI / 2;
+  const N = VENUE.pots.length, LPP = 26, UPP = 6, FPU = 14;
+  const pots = new THREE.InstancedMesh(potGeo, potMat, N), leaves = new THREE.InstancedMesh(leafGeo, leafMat, N * LPP), fls = new THREE.InstancedMesh(flowerGeo, flowerMat, N * UPP * FPU);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  VENUE.pots.forEach((x, pi) => {
+    const z0 = SEA_EDGE_Z + 0.75, r = mulberry(Math.round(x * 31 + 5));
+    pots.setMatrixAt(pi, m.makeTranslation(x, 0, z0));
+    const sl = soil.clone(); sl.position.set(x, 0.43, z0); scene.add(sl);
+    for (let k = 0; k < LPP; k++) { const a = r() * 6.28, rad = 0.05 + r() * 0.24, y = 0.47 + r() * 0.16 - rad * 0.25;
+      e.set(-Math.PI / 2 + (rad * 2.2) * Math.cos(0) + (r() - 0.5) * 0.5, a, 0, 'YXZ'); q.setFromEuler(e);
+      leaves.setMatrixAt(pi * LPP + k, m.compose(v.set(x + Math.cos(a) * rad, y, z0 + Math.sin(a) * rad), q, one.set(1, 1, 1).multiplyScalar(0.8 + r() * 0.5))); }
+    for (let u = 0; u < UPP; u++) { const a = r() * 6.28, rad = r() * 0.17, cy = 0.74 + r() * 0.12, cx = x + Math.cos(a) * rad, cz = z0 + Math.sin(a) * rad;
+      for (let k = 0; k < FPU; k++) { const p = new THREE.Vector3().randomDirection(); p.y = Math.abs(p.y) * 0.6;
+        fls.setMatrixAt((pi * UPP + u) * FPU + k, m.compose(v.set(cx + p.x * 0.055, cy + p.y * 0.055, cz + p.z * 0.055), q.identity(), one.set(1, 1, 1).multiplyScalar(0.8 + r() * 0.6))); } }
+  });
+  for (const im of [pots, leaves, fls]) { im.castShadow = true; im.receiveShadow = true; im.computeBoundingSphere(); scene.add(im); }
 }
 // samovar counter (wood) + awning
 const counter = new THREE.Group();
