@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#c9733a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Çay Bahçesi</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/jsm/" } }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="bubbles"></div>
+<div id="hud">
+  <div class="pill" id="money">🪙 Para: <b id="moneyVal">0</b> ₺</div>
+  <div class="pill" id="stats">😊 <b id="happyVal">0</b> &nbsp; 😠 <b id="angryVal">0</b>/5</div>
+</div>
+<div id="trayHud" class="pill hidden">🫖 Tepsi: <b id="trayVal">0</b> çay</div>
+<div id="toast"></div>
+<button id="camBtn">🎥 Üstten</button>
+<div id="joyBase"><div id="joyKnob"></div></div>
+<div id="joyHint" class="hidden">🕹️</div>
+<div id="hint">Yere dokun: yürü · Semavere dokun: çay al · Masaya dokun: servis et</div>
+<div id="overlay">
+  <div class="card">
+    <h1>Çay Bahçesi</h1>
+    <p class="sub">Boğaz kıyısında bir çay bahçesi</p>
+    <ul>
+      <li>👆 Yere dokun, garson oraya yürüsün</li>
+      <li>🫖 Semavere dokun, tepsiye 3 çay al</li>
+      <li>☕ Bekleyen müşterinin masasına dokun, çayını ver</li>
+      <li>⏳ Müşteri çok beklerse kızıp gider (5 kaçan = oyun biter)</li>
+    </ul>
+    <div id="loading">Yükleniyor… <span id="loadPct">0%</span></div>
+    <button id="startBtn" class="hidden">Başla</button>
+  </div>
+</div>
+<div id="err"></div>
+<script>
+window.addEventListener('error', e => { const el=document.getElementById('err'); el.style.display='block'; el.textContent += 'Hata: ' + e.message + ' (' + (e.filename||'').split('/').pop() + ':' + e.lineno + ')\n'; });
+window.addEventListener('unhandledrejection', e => { const el=document.getElementById('err'); el.style.display='block'; el.textContent += 'Hata: ' + (e.reason && e.reason.message || e.reason) + '\n'; });
+</script>
+<script type="module" src="game.js"></script>
+</body>
+</html>

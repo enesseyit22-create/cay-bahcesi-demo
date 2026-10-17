@@ -1,0 +1,33 @@
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;background:#e9b98a;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;touch-action:none;overscroll-behavior:none}
+#c{position:fixed;inset:0;width:100vw;height:100vh;display:block;touch-action:none}
+#hud{position:fixed;top:calc(env(safe-area-inset-top) + 10px);left:10px;right:10px;display:flex;justify-content:space-between;pointer-events:none;z-index:5}
+.pill{background:rgba(60,28,12,.78);color:#fff3e0;padding:8px 14px;border-radius:999px;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,.25);border:1px solid rgba(255,210,150,.35)}
+.pill b{color:#ffd27a}
+#trayHud{position:fixed;top:calc(env(safe-area-inset-top) + 58px);left:10px;z-index:5;pointer-events:none}
+.hidden{display:none!important}
+#toast{position:fixed;left:50%;top:22%;transform:translateX(-50%);background:rgba(160,40,20,.9);color:#fff;padding:10px 20px;border-radius:14px;font-size:22px;font-weight:700;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:6;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+#hint{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 10px);left:50%;transform:translateX(-50%);background:rgba(60,28,12,.65);color:#ffe9cc;font-size:12.5px;padding:6px 12px;border-radius:10px;pointer-events:none;text-align:center;width:max-content;max-width:94vw;z-index:5}
+#bubbles{position:fixed;inset:0;pointer-events:none;z-index:4}
+.bubble{position:absolute;transform:translate(-50%,-100%);background:#fffaf0;border-radius:14px;padding:4px 8px 6px;font-size:22px;box-shadow:0 2px 6px rgba(0,0,0,.3);text-align:center;min-width:44px}
+.bubble:after{content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-bottom:0;border-top-color:#fffaf0}
+.bubble .bar{height:5px;border-radius:3px;background:#ddd;margin-top:3px;overflow:hidden}
+.bubble .bar i{display:block;height:100%;background:#3cb043;width:100%}
+.float{position:absolute;transform:translate(-50%,-100%);font-weight:800;font-size:22px;color:#ffd24a;text-shadow:0 2px 3px #6b2e00,0 0 2px #6b2e00;animation:up 1.2s ease-out forwards}
+@keyframes up{from{opacity:1;margin-top:0}to{opacity:0;margin-top:-60px}}
+#overlay{position:fixed;inset:0;background:rgba(40,18,6,.55);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
+.card{background:linear-gradient(#fff6e8,#f6dcb8);border-radius:20px;padding:22px 22px 18px;max-width:380px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.4);color:#4a220c;text-align:center;border:3px solid #b3261e}
+.card h1{margin:0;font-size:40px;color:#b3261e;letter-spacing:1px;font-family:Georgia,serif}
+.card .sub{margin:2px 0 12px;font-style:italic}
+.card ul{text-align:left;padding-left:4px;list-style:none;font-size:15px;line-height:1.6;margin:0 0 14px}
+#startBtn{font-size:22px;padding:12px 42px;border:0;border-radius:999px;background:#b3261e;color:#fff;font-weight:700;box-shadow:0 4px 0 #6e1410}
+#startBtn:active{transform:translateY(3px);box-shadow:0 1px 0 #6e1410}
+#err{display:none;position:fixed;bottom:40px;left:6px;right:6px;background:rgba(150,0,0,.9);color:#fff;font:12px monospace;white-space:pre-wrap;padding:6px;z-index:20;max-height:30vh;overflow:auto}
+
+#camBtn{position:fixed;top:calc(env(safe-area-inset-top) + 58px);right:10px;z-index:7;background:rgba(179,38,30,.92);color:#fff;border:2px solid rgba(255,220,170,.6);border-radius:999px;font-size:16px;font-weight:700;padding:8px 14px;box-shadow:0 2px 8px rgba(0,0,0,.3);touch-action:manipulation}
+#camBtn:active{transform:scale(.96)}
+#joyBase{position:fixed;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;background:rgba(255,240,220,.18);border:2px solid rgba(255,240,220,.55);pointer-events:none;z-index:6;display:none}
+#joyBase.active{display:block}
+#joyKnob{position:absolute;left:50%;top:50%;width:52px;height:52px;border-radius:50%;background:rgba(255,230,190,.8);box-shadow:0 2px 6px rgba(0,0,0,.35);transform:translate(-50%,-50%)}
+#joyHint{position:fixed;left:24px;bottom:calc(env(safe-area-inset-bottom) + 60px);width:84px;height:84px;border-radius:50%;border:2px dashed rgba(255,240,220,.6);color:#fff;font-size:30px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5;opacity:.7}
