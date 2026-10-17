@@ -227,7 +227,8 @@ TABLE_POS.forEach(([x, z], i) => {
   const gl = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.028, 0.1, 10), new THREE.MeshStandardMaterial({ color: 0x9a2b12, roughness: 0.15, transparent: true, opacity: 0.85 }));
   gl.position.y = 0.05; glass.add(gl);
   const sauc = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.01, 12), std(0xffffff, { roughness: 0.3 })); glass.add(sauc);
-  glass.position.set(0.15, 0.76, 0.1); glass.visible = false; g.add(glass);
+  glass.position.set(-0.28, 0.76, 0.08); glass.visible = false; g.add(glass);
+  const glass2 = glass.clone(); glass2.position.set(0.28, 0.76, -0.08); g.add(glass2);
   // placeholder chairs: two simple wooden chairs (left/right of table)
   const seats = [];
   for (const side of [-1, 1]) {
@@ -238,7 +239,7 @@ TABLE_POS.forEach(([x, z], i) => {
   const hit = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.25, 1.4, 12), new THREE.MeshBasicMaterial({ visible: false }));
   hit.position.y = 0.7; hit.userData.table = i; g.add(hit);
   scene.add(g);
-  tables.push({ i, group: g, pos: new THREE.Vector3(x, 0, z), seats, customer: null, glass, hit });
+  tables.push({ i, group: g, pos: new THREE.Vector3(x, 0, z), seats, customer: null, party: null, glasses: [glass, glass2], hit });
 });
 function makeChair() {
   if (chairSrc) return prep(chairSrc.clone());
@@ -367,26 +368,50 @@ function makePerson(rnd) {
   }
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   const sc = 0.92 + rnd() * 0.12; g.scale.setScalar(sc);
-  scene.add(g); return { group: g, body, legs, arms };
+  const headG = new THREE.Group(); headG.position.y = 1.45; body.add(headG);
+  for (const m of [...body.children]) if (m.isMesh && m.position.y > 1.5) { body.remove(m); m.position.y -= 1.45; headG.add(m); }
+  scene.add(g); return { group: g, body, legs, arms, headG };
 }
 
 const customers = [];
 let rng = mulberry(Date.now() & 0xffff);
-function spawnCustomer() {
-  const free = tables.filter(t => !t.customer);
+const CHAT_LINES = [
+  'Hava ne güzel bugün', 'Maçı izledin mi?', 'Bu çayın tadı harika', 'Torunum üniversiteyi kazandı!', 'Şu vapura bak',
+  'Boğaz bugün çok sakin', 'Akşama balık mı yesek?', 'Martılar yine coştu', 'Emekli maaşı yatmış mı?', 'Kadıköy\'e geçecek misin?',
+  'Simit de alalım mı?', 'Dün yağmur çok yağdı', 'Bizim kedi yine kayboldu', 'Fenerbahçe bu sene alır', 'Yok canım, Galatasaray alır',
+  'Çocuklar hafta sonu geliyor', 'Şu köprünün ışıkları ne güzel', 'Eskiden çay bir liraydı', 'Bir tavla atalım mı?', 'Haberleri duydun mu?',
+  'Bu bahçe hep böyleydi', 'Rüzgâr serinletti', 'Kızım nişanlanıyor', 'Doktor tuzu yasakladı', 'Vallahi haklısın',
+  'Hadi canım, öyle mi?', 'Ben de onu diyorum', 'Aynen öyle', 'Bak sen şu işe', 'Hiç sorma, yoruldum'];
+const REPLIES = ['Vallahi haklısın', 'Hadi canım, öyle mi?', 'Ben de onu diyorum', 'Aynen öyle', 'Bak sen şu işe', 'Maşallah!', 'Hayırlı olsun!', 'Doğru söylüyorsun', 'Yok artık!', 'He ya, aynen'];
+const parties = [];
+function spawnCustomer(forcePair) {
+  const free = tables.filter(t => !t.party);
   if (!free.length) return;
   const t = free[Math.floor(rng() * free.length)];
-  const seat = t.seats[Math.floor(rng() * 2)];
-  const p = makePerson(rng);
-  p.group.position.copy(ENTRANCE);
-  const c = { ...p, table: t, seat, state: 'walkIn', patience: 0, maxPatience: Math.max(14, 26 - stats.served * 0.4), walkT: 0, path: [new THREE.Vector3(5.6, 0, 5.4), seat.pos.clone().add(new THREE.Vector3(Math.sign(seat.pos.x - t.pos.x) * 0.45, 0, 0))], bubble: null, drinkT: 0 };
-  t.customer = c; customers.push(c);
+  const pair = forcePair !== undefined ? forcePair : rng() < 0.45;
+  const seatIdx = pair ? [0, 1] : [Math.floor(rng() * 2)];
+  const party = { table: t, members: [], need: seatIdx.length, served: 0, state: 'arriving', patience: 0,
+    maxPatience: Math.max(14, 26 - stats.served * 0.4) * (pair ? 1.3 : 1), drinkT: 0, bubble: null, chatT: 1.5 + rng() * 2, speaker: 0, said: new Set() };
+  seatIdx.forEach((si, n) => {
+    const seat = t.seats[si]; const p = makePerson(rng);
+    p.group.position.copy(ENTRANCE).add(new THREE.Vector3(n * 0.7, 0, n * 0.35));
+    const c = { ...p, party, table: t, seat, seatIdx: si, state: 'walkIn', walkT: 0, lookT: rng() * 5, lookYaw: 0, talk: 0,
+      path: [new THREE.Vector3(5.6 - n * 0.4, 0, 5.4 + n * 0.3), seat.pos.clone().add(new THREE.Vector3(Math.sign(seat.pos.x - t.pos.x) * 0.45, 0, 0))] };
+    party.members.push(c); customers.push(c);
+  });
+  t.party = party; t.customer = party.members[0]; parties.push(party);
 }
-function makeBubble(c) {
-  const el = document.createElement('div'); el.className = 'bubble'; el.innerHTML = '🍵<div class="bar"><i></i></div>';
-  document.getElementById('bubbles').appendChild(el); c.bubble = el; c.bar = el.querySelector('i');
+function makeBubble(party) {
+  const el = document.createElement('div'); el.className = 'bubble'; el.innerHTML = '<span class="ord"></span><div class="bar"><i></i></div>';
+  document.getElementById('bubbles').appendChild(el); party.bubble = el; party.bar = el.querySelector('i'); party.ord = el.querySelector('.ord');
+}
+function say(c, text, dur = 2.6) {
+  if (c.chat) c.chat.remove();
+  const el = document.createElement('div'); el.className = 'chat'; el.textContent = text;
+  document.getElementById('bubbles').appendChild(el); c.chat = el; c.chatLeft = dur; c.talk = dur;
 }
 function removeBubble(c) { if (c.bubble) { c.bubble.remove(); c.bubble = null; } }
+function removeChat(c) { if (c.chat) { c.chat.remove(); c.chat = null; } c.talk = 0; }
 
 // ---------- UI ----------
 const stats = { money: 0, served: 0, angry: 0 };
@@ -532,20 +557,23 @@ function startBrew(auto) {
   W.busy = 2.6; W.brewT = 0; W.picked = false; ownerAnim.setOverride('pour'); toast('Çay dolduruluyor…', 'rgba(120,70,20,.92)');
 }
 function serveTable(t, auto) {
-  const c = t.customer;
-  {
-    if (!c || c.state !== 'waiting') { if (!auto && c && c.state === 'drinking') toast('Afiyet olsun!', 'rgba(40,110,50,.92)'); return; }
-    if (W.tray <= 0) { if (!auto) toast('Önce semaverden çay al!'); else if (!t.warned) { t.warned = true; toast('Önce semaverden çay al!'); } return; }
-    W.tray--; c.state = 'drinking'; c.drinkT = 7 + rng() * 3; removeBubble(c);
-    W.target = null; W.action = null; W.yaw = Math.atan2(t.pos.x - W.pos.x, t.pos.z - W.pos.z);
-    const dur = waiterAnim.playOnce('serve', 1.15); W.lock = dur ? dur * 0.85 : 0;
-    setTimeout(() => { if (c.state === 'drinking') t.glass.visible = true; }, dur ? dur * 500 : 0);
-    const left = 1 - c.patience / c.maxPatience; const tip = Math.round(left * 5);
-    const earned = 5 + tip; stats.money += earned; stats.served++;
-    floatText(t.pos.clone().setY(1.6), `+${earned} ₺`);
+  const P = t.party;
+  if (!P || P.state !== 'waiting') { if (!auto && P && P.state === 'drinking') toast('Afiyet olsun!', 'rgba(40,110,50,.92)'); return; }
+  if (W.tray <= 0) { if (!auto) toast('Önce semaverden çay al!'); else if (!t.warned) { t.warned = true; toast('Önce semaverden çay al!'); } return; }
+  const n = Math.min(P.need, W.tray); W.tray -= n; P.need -= n;
+  W.target = null; W.action = null; W.yaw = Math.atan2(t.pos.x - W.pos.x, t.pos.z - W.pos.z);
+  const dur = waiterAnim.playOnce('serve', 1.15); W.lock = dur ? dur * 0.85 : 0;
+  // glasses go to the seats that do not have one yet
+  const targets = P.members.map(m => t.glasses[m.seatIdx]).filter(g => !g.visible && !g.pending).slice(0, n);
+  targets.forEach(g => { g.pending = true; setTimeout(() => { g.pending = false; if (t.party === P) g.visible = true; }, dur ? dur * 500 : 0); });
+  const left = 1 - P.patience / P.maxPatience; const tip = Math.round(left * 5);
+  const earned = n * 5 + tip * (P.need === 0 ? 1 : 0); stats.money += earned;
+  floatText(t.pos.clone().setY(1.6), `+${earned} ₺`);
+  if (P.need === 0) {
+    stats.served += P.members.length; P.state = 'drinking'; P.drinkT = 8 + rng() * 4; removeBubble(P);
     toast(tip >= 3 ? 'Eline sağlık! 😊' : 'Teşekkürler!', 'rgba(40,110,50,.92)');
-    updateHud();
-  }
+  } else toast(`Bir çay daha lazım! (${P.need})`, 'rgba(120,70,20,.92)');
+  updateHud();
 }
 function finishBrew() { if (W.tray < 3) { W.tray = 3; updateHud(); } toast('Çay hazır! 🍵', 'rgba(40,110,50,.92)'); }
 
@@ -627,6 +655,12 @@ function poseSit(c) {
   for (const l of c.legs) { l.hip.rotation.x = -Math.PI / 2; l.knee.rotation.x = Math.PI / 2; }
   c.arms[0].rotation.x = -0.5; c.arms[1].rotation.x = -0.5; c.body.position.y = -0.4;
 }
+const _cv = new THREE.Vector3();
+function screenAt(el, pos) {
+  const v = _cv.copy(pos).project(camera);
+  el.style.display = v.z > 1 || Math.abs(v.x) > 1.2 ? 'none' : '';
+  el.style.left = ((v.x + 1) / 2 * innerWidth) + 'px'; el.style.top = ((1 - v.y) / 2 * innerHeight) + 'px';
+}
 function updateCustomers(dt) {
   for (let k = customers.length - 1; k >= 0; k--) {
     const c = customers[k], g = c.group;
@@ -636,8 +670,8 @@ function updateCustomers(dt) {
       if (dist < 0.06) {
         c.path.shift();
         if (!c.path.length) {
-          if (c.state === 'walkIn') { c.state = 'waiting'; g.position.copy(c.seat.pos); g.rotation.y = c.seat.faceY; poseSit(c); makeBubble(c); }
-          else { scene.remove(g); customers.splice(k, 1); continue; }
+          if (c.state === 'walkIn') { c.state = 'seated'; g.position.copy(c.seat.pos); g.rotation.y = c.seat.faceY; poseSit(c); }
+          else { removeChat(c); scene.remove(g); customers.splice(k, 1); continue; }
         }
       } else {
         d.normalize(); g.position.addScaledVector(d, Math.min(dist, 1.5 * dt));
@@ -645,33 +679,69 @@ function updateCustomers(dt) {
         g.rotation.y = lerpAngle(g.rotation.y, Math.atan2(d.x, d.z), Math.min(1, dt * 10));
         c.walkT += dt * 8; poseStand(c, c.walkT);
       }
-    } else if (c.state === 'waiting') {
-      c.patience += dt; const f = 1 - c.patience / c.maxPatience;
-      c.bar.style.width = (f * 100) + '%'; c.bar.style.background = f > 0.5 ? '#3cb043' : f > 0.25 ? '#e0a020' : '#d0302a';
-      c.bubble.firstChild.textContent = f > 0.25 ? '🍵' : '😤';
-      if (f <= 0) { leave(c, true); }
-    } else if (c.state === 'drinking') {
-      c.drinkT -= dt; c.arms[1].rotation.x = -0.9 + Math.sin(elapsed * 1.5) * 0.25;
-      if (c.drinkT <= 0) leave(c, false);
+    } else if (c.state === 'seated') {
+      const P = c.party, other = P.members.find(m => m !== c && m.state === 'seated');
+      // head: look at partner while either talks, otherwise glance around (sea, ferry, waiter)
+      c.lookT -= dt;
+      if (c.lookT <= 0) { c.lookT = 2 + rng() * 3; c.lookYaw = (rng() - 0.5) * 1.4; }
+      let wantYaw = c.lookYaw, wantPitch = 0;
+      if (other && (c.talk > 0 || other.talk > 0)) { wantYaw = 0; wantPitch = c.talk > 0 ? Math.sin(elapsed * 7) * 0.06 : Math.max(0, Math.sin(elapsed * 2.5)) * 0.12; }
+      c.headG.rotation.y = lerpAngle(c.headG.rotation.y, wantYaw, 1 - Math.exp(-dt * 5));
+      c.headG.rotation.x += (wantPitch - c.headG.rotation.x) * Math.min(1, dt * 8);
+      // talk gestures: forearm waves while speaking; drinking lifts the glass now and then
+      const drinking = P.state === 'drinking' && c.table.glasses[c.seatIdx].visible;
+      if (c.talk > 0) { c.talk -= dt; c.arms[0].rotation.x = -0.9 + Math.sin(elapsed * 6) * 0.35; c.arms[0].rotation.z = 0.2 + Math.sin(elapsed * 4.3) * 0.15; }
+      else { c.arms[0].rotation.x += (-0.5 - c.arms[0].rotation.x) * Math.min(1, dt * 4); c.arms[0].rotation.z *= 0.9; }
+      c.arms[1].rotation.x = drinking && Math.sin(elapsed * 0.9 + c.seatIdx * 2) > 0.6 ? -1.4 : -0.5;
+      c.body.rotation.x = c.talk > 0 ? -0.05 : 0;
     }
-    if (c.bubble) {
-      const v = g.position.clone().setY(camMode === 'top' ? 2.0 : 1.75).project(camera);
-      c.bubble.style.display = v.z > 1 ? 'none' : '';
-      c.bubble.style.left = ((v.x + 1) / 2 * innerWidth) + 'px'; c.bubble.style.top = ((1 - v.y) / 2 * innerHeight) + 'px';
+    if (c.chat) {
+      c.chatLeft -= dt; if (c.chatLeft <= 0) removeChat(c);
+      else screenAt(c.chat, _cv.set(g.position.x, camMode === 'top' ? 1.8 : 1.5, g.position.z));
     }
   }
+  for (let k = parties.length - 1; k >= 0; k--) {
+    const P = parties[k];
+    if (P.state === 'arriving' && P.members.every(m => m.state === 'seated')) { P.state = 'waiting'; makeBubble(P); }
+    if (P.state === 'waiting') {
+      P.patience += dt; const f = 1 - P.patience / P.maxPatience;
+      P.bar.style.width = (f * 100) + '%'; P.bar.style.background = f > 0.5 ? '#3cb043' : f > 0.25 ? '#e0a020' : '#d0302a';
+      P.ord.textContent = f > 0.25 ? '🍵'.repeat(P.need) + (P.need > 1 ? ' ×' + P.need : '') : '😤';
+      if (f <= 0) { leaveParty(P, true); continue; }
+    } else if (P.state === 'drinking') {
+      P.drinkT -= dt; if (P.drinkT <= 0) { leaveParty(P, false); continue; }
+    }
+    // pairs chat while waiting and drinking, alternating speakers
+    if (P.members.length > 1 && (P.state === 'waiting' || P.state === 'drinking')) {
+      P.chatT -= dt;
+      if (P.chatT <= 0) {
+        const sp = P.members[P.speaker], prevLine = P.lastLine;
+        let line;
+        if (prevLine && !REPLIES.includes(prevLine) && rng() < 0.45) line = REPLIES[Math.floor(rng() * REPLIES.length)];
+        else { let tries = 0; do { line = CHAT_LINES[Math.floor(rng() * CHAT_LINES.length)]; } while ((P.said.has(line) || REPLIES.includes(line)) && ++tries < 20); P.said.add(line); }
+        if (P.state === 'waiting' && P.patience / P.maxPatience > 0.7 && rng() < 0.3) line = rng() < 0.5 ? 'Çaylar nerede kaldı?' : 'Garson bey, bakar mısın?';
+        if (P.state === 'drinking' && rng() < 0.2) line = 'Bu çayın tadı harika';
+        say(sp, line, 2.4 + line.length * 0.03); P.lastLine = line;
+        P.speaker = 1 - P.speaker; P.chatT = 2.9 + line.length * 0.03 + rng() * 1.5;
+      }
+    }
+    if (P.bubble) screenAt(P.bubble, _cv.set(P.table.pos.x, camMode === 'top' ? 2.4 : 2.2, P.table.pos.z));
+  }
 }
-function leave(c, angry) {
-  removeBubble(c); c.state = 'leaving'; c.table.glass.visible = false;
-  const t = c.table; t.customer = null;
-  g_standUp(c);
-  c.path = [c.seat.pos.clone().add(new THREE.Vector3(Math.sign(c.seat.pos.x - t.pos.x) * 0.5, 0, 0.5)), new THREE.Vector3(5.6, 0, 5.4), ENTRANCE.clone().add(new THREE.Vector3(1.5, 0, 0))];
+function leaveParty(P, angry) {
+  removeBubble(P); P.state = 'left'; const t = P.table;
+  t.glasses.forEach(g => { g.visible = false; g.pending = false; }); t.party = null; t.customer = null;
+  parties.splice(parties.indexOf(P), 1);
+  P.members.forEach((c, n) => {
+    removeChat(c); c.state = 'leaving'; g_standUp(c); c.headG.rotation.set(0, 0, 0);
+    c.path = [c.seat.pos.clone().add(new THREE.Vector3(Math.sign(c.seat.pos.x - t.pos.x) * 0.5, 0, 0.5)), new THREE.Vector3(5.6, 0, 5.4 + n * 0.4), ENTRANCE.clone().add(new THREE.Vector3(1.5, 0, n * 0.4))];
+  });
   if (angry) {
-    stats.angry++; floatText(c.group.position.clone().setY(2), '😠'); toast('Müşteri kızıp gitti!'); updateHud();
+    stats.angry++; floatText(P.members[0].group.position.clone().setY(2), '😠'); toast(P.members.length > 1 ? 'Müşteriler kızıp gitti!' : 'Müşteri kızıp gitti!'); updateHud();
     if (stats.angry >= 5) endGame();
   }
 }
-function g_standUp(c) { c.body.position.y = 0; for (const l of c.legs) { l.hip.rotation.x = 0; l.knee.rotation.x = 0; } }
+function g_standUp(c) { c.body.position.y = 0; c.body.rotation.x = 0; c.arms.forEach(a => { a.rotation.set(0, 0, 0); }); for (const l of c.legs) { l.hip.rotation.x = 0; l.knee.rotation.x = 0; } }
 function endGame() {
   gameOver = true;
   const ov = $('overlay'); ov.classList.remove('hidden'); ov.style.display = 'flex';
@@ -767,7 +837,7 @@ $('startBtn').onclick = () => {
 };
 applyCamMode();
 if (new URLSearchParams(location.search).has('autostart')) $('startBtn').onclick();
-window.__game = { W, customers, tables, stats, spawnCustomer, handTray, seatAll: () => customers.forEach(c => { if (c.state === 'walkIn') { c.path = [c.path[c.path.length - 1]]; c.group.position.copy(c.path[0]); } }), tap: handleTap, cycleCam, joy, waiterAnim, ownerAnim, setView: (y, p) => { viewYaw = y; viewPitch = p; }, startBrew, serveTable, get camMode() { return camMode; }, tapWorld: (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); handleTap((v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight); } };
+window.__game = { W, customers, tables, stats, spawnCustomer, handTray, seatAll: () => customers.forEach(c => { if (c.state === 'walkIn') { c.path = [c.path[c.path.length - 1]]; c.group.position.copy(c.path[0]); } }), tap: handleTap, parties, clearParties: () => [...parties].forEach(P => leaveParty(P, false)), cycleCam, joy, waiterAnim, ownerAnim, setView: (y, p) => { viewYaw = y; viewPitch = p; }, startBrew, serveTable, get camMode() { return camMode; }, tapWorld: (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); handleTap((v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight); } };
 
 // ---------- loop ----------
 const clock = new THREE.Clock();

@@ -53,3 +53,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#e9b98a;font-family:sy
   #toast{top:18%;font-size:18px}
   .bubble{font-size:18px}
 }
+
+.chat{position:absolute;transform:translate(-50%,-100%);background:#fff;color:#3a1c0c;border-radius:12px;padding:4px 9px;font-size:14.5px;font-weight:600;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3);border:1.5px solid #e2c9a6;animation:pop .2s ease-out}
+.chat:after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-bottom:0;border-top-color:#fff}
+@keyframes pop{from{transform:translate(-50%,-100%) scale(.6);opacity:0}to{transform:translate(-50%,-100%) scale(1);opacity:1}}
+.bubble .ord{white-space:nowrap}
