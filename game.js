@@ -351,7 +351,7 @@ if (ENV.env_railing) { // 3.24 m x 1 m section, tiled along the waterfront
 }
 if (ENV.env_lamp) { instanceGLB(ENV.env_lamp, VENUE.lamps.map(([x, z], i) => TRS(x, 0, z, i, 0.85)), { shadow: false }); envTris.lamp = countTris(ENV.env_lamp) + ' ×' + VENUE.lamps.length; }
 if (ENV.env_bench) { instanceGLB(ENV.env_bench, VENUE.benches.map(([x, z, y]) => TRS(x, 0, z, y))); envTris.bench = countTris(ENV.env_bench) + ' ×' + VENUE.benches.length; }
-let counterTopY = 1.01;
+let counterTopY = 1.01, awningBox = null, awningMats = [];
 if (ENV.env_bar) { // carved counter, long side along z, front to the garden (+x); 1 m tall
   placeholders.counter.forEach(m => m.visible = false);
   const bar = prep(ENV.env_bar); const bb = new THREE.Box3().setFromObject(bar);
@@ -364,8 +364,9 @@ if (ENV.env_bar) { // carved counter, long side along z, front to the garden (+x
   envTris.counter = countTris(bar); window.__bar = bar;
 }
 if (ENV.env_awning && VENUE.awning) { // striped awning on posts, standing over the counter area
-  const aw = prep(ENV.env_awning); aw.scale.setScalar(1.2); aw.rotation.y = Math.PI / 2; aw.position.set(SAMOVAR_POS.x - 0.35, 0, SAMOVAR_POS.z); scene.add(aw);
-  aw.traverse(o => { if (o.isMesh) { o.material.transparent = true; topFade.push(o.material); } });
+  const aw = prep(ENV.env_awning); aw.scale.set(1.2, 1.45, 1.2); aw.rotation.y = Math.PI / 2; aw.position.set(SAMOVAR_POS.x - 0.6, 0, SAMOVAR_POS.z); scene.add(aw);
+  aw.updateMatrixWorld(true); awningBox = new THREE.Box3().setFromObject(aw).expandByScalar(0.35); awningMats = [];
+  aw.traverse(o => { if (o.isMesh) { o.material.transparent = true; topFade.push(o.material); awningMats.push(o.material); } });
   envTris.awning = countTris(aw);
 }
 // ---------- props ----------
@@ -1065,7 +1066,8 @@ function resize() {
 addEventListener('resize', resize); resize();
 const _v = new THREE.Vector3(), _r = new THREE.Vector3(), _s = new THREE.Vector3(), _w = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(), _pivotWant = new THREE.Vector3();
 const camPivot = new THREE.Vector3(), camRay = new THREE.Raycaster(); const OTS_DIST = 2.6; let camCurDist = OTS_DIST;
-const camColliders = []; scene.traverse(o => { if (o.isMesh && o.userData.camBlock) camColliders.push(o); });
+const camColliders = []; scene.traverse(o => { if (!o.isMesh || !o.userData.camBlock) return; for (let p = o; p; p = p.parent) if (!p.visible) return; camColliders.push(o); });
+const camDragging = () => [...pointers.values()].some(p => p.role === 'look');
 function updateCamera(dt, snap) {
   if (inMenu) { // lobby: slow orbit around the idle waiter
     const a = 0.75 + Math.sin(elapsed * 0.07) * 0.85, r = 3.3; // slow back-and-forth arc in front of him (a full circle would clip the furniture)
@@ -1073,6 +1075,10 @@ function updateCamera(dt, snap) {
     camera.lookAt(W.pos.x - Math.cos(a) * 0.9, 1.15, W.pos.z + Math.sin(a) * 0.9); return;
   }
   if (window.__camOverride) { const o = window.__camOverride; camera.position.set(...o.pos); camera.lookAt(...o.look); return; }
+  if (camMode !== 'top' && W.busy > 0 && !camDragging()) { // tea hand-over: swing the view so waiter, counter and owner are all in frame
+    const wantYaw = camMode === 'third' ? -Math.PI / 2 + 0.38 : -Math.PI / 2 + 0.05, wantPitch = camMode === 'third' ? -0.1 : -0.16;
+    const k = 1 - Math.exp(-dt * 3); viewYaw = lerpAngle(viewYaw, wantYaw, k); viewPitch += (wantPitch - viewPitch) * k;
+  }
   if (camMode !== 'top') {
     const f = _v.set(Math.sin(viewYaw) * Math.cos(viewPitch), Math.sin(viewPitch), Math.cos(viewYaw) * Math.cos(viewPitch));
     if (camMode === 'third') {
@@ -1097,8 +1103,9 @@ function updateCamera(dt, snap) {
       const eye = W.pos.clone().add(new THREE.Vector3(0, 1.66 + waiter.inner.position.y, 0)).addScaledVector(new THREE.Vector3(f.x, 0, f.z).normalize(), 0.12);
       camera.position.copy(eye); camera.lookAt(eye.x + f.x, eye.y + f.y, eye.z + f.z);
     }
+    if (awningBox) { const inside = awningBox.containsPoint(camera.position); for (const m of awningMats) { m.opacity += ((inside ? 0.18 : 1) - m.opacity) * Math.min(1, dt * 8 + (snap ? 1 : 0)); m.depthWrite = m.opacity > 0.95; } }
     camTarget.set(W.pos.x, 0, W.pos.z);
-    sun.target.position.copy(camTarget); sun.position.copy(camTarget).add(new THREE.Vector3(-7, 16, 6));
+    sun.target.position.copy(camTarget); sun.position.copy(camTarget).addScaledVector(SUN_DIR, 18);
     return;
   }
   const portrait = camera.aspect < 1;
