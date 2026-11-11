@@ -45,6 +45,67 @@ body {
   overflow-x: hidden;
 }
 
+.ota-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #0d7a78, #095e5c);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(13, 122, 120, 0.28);
+}
+
+.ota-banner[hidden] {
+  display: none !important;
+}
+
+.ota-banner.is-force {
+  background: linear-gradient(135deg, #b86b2c, #8f4e16);
+}
+
+.ota-banner-copy {
+  flex: 1;
+  min-width: 180px;
+}
+
+.ota-banner-copy strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+}
+
+.ota-banner-copy p {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  opacity: 0.92;
+}
+
+.ota-banner-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ota-banner .btn-ghost {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+.ota-banner .btn-primary {
+  background: #fff;
+  color: var(--teal-deep);
+  border-color: #fff;
+  box-shadow: none;
+}
+
+.ota-card .row-actions {
+  margin-top: 10px;
+}
+
 .app-bg {
   position: fixed;
   inset: 0;

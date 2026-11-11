@@ -242,6 +242,23 @@ const en = {
   "dur.sec": "{n} s",
   "dur.min": "{m} min {s} s",
   "dur.hr": "{h} h {m} min",
+
+  "ota.banner.title": "Update available · v{version}",
+  "ota.banner.force": "Required update · v{version}",
+  "ota.banner.notes": "{notes}",
+  "ota.banner.update": "Update now",
+  "ota.banner.later": "Later",
+  "ota.check": "Check for updates",
+  "ota.checking": "Checking…",
+  "ota.upToDate": "You're on the latest version (v{version})",
+  "ota.available": "Update available: v{version}",
+  "ota.error": "Update check failed: {error}",
+  "ota.manifestUrl": "OTA manifest URL",
+  "ota.manifestSave": "Save URL",
+  "ota.manifestHint": "Host ota-manifest.json on any HTTPS CDN for external updates.",
+  "ota.section": "Updates (OTA)",
+  "ota.current": "Installed v{version} (build {build})",
+  "ota.applying": "Applying update…",
 };
 
 function overlay(base, extra) {
@@ -447,6 +464,22 @@ const tr = overlay(en, {
   "dur.sec": "{n} sn",
   "dur.min": "{m} dk {s} sn",
   "dur.hr": "{h} sa {m} dk",
+
+  "ota.banner.title": "Güncelleme var · v{version}",
+  "ota.banner.force": "Zorunlu güncelleme · v{version}",
+  "ota.banner.update": "Şimdi güncelle",
+  "ota.banner.later": "Sonra",
+  "ota.check": "Güncellemeleri kontrol et",
+  "ota.checking": "Kontrol ediliyor…",
+  "ota.upToDate": "Güncelsiniz (v{version})",
+  "ota.available": "Yeni sürüm: v{version}",
+  "ota.error": "Kontrol başarısız: {error}",
+  "ota.manifestUrl": "OTA manifest URL",
+  "ota.manifestSave": "URL kaydet",
+  "ota.manifestHint": "Dışarıdan güncelleme için ota-manifest.json dosyasını herhangi bir HTTPS CDN’de yayınlayın.",
+  "ota.section": "Güncellemeler (OTA)",
+  "ota.current": "Yüklü v{version} (build {build})",
+  "ota.applying": "Güncelleme uygulanıyor…",
 });
 
 const de = overlay(en, {

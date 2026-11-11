@@ -2,11 +2,18 @@
   "appId": "app.kerf.vector",
   "appName": "KERF",
   "webDir": ".",
-  "server": { "androidScheme": "https" },
+  "server": {
+    "androidScheme": "https"
+  },
   "plugins": {
     "SplashScreen": {
       "backgroundColor": "#eef3f8",
       "launchAutoHide": true
+    },
+    "CapacitorUpdater": {
+      "autoUpdate": false,
+      "appId": "app.kerf.vector",
+      "version": "1.2.0"
     }
   }
 }

@@ -1,0 +1,24 @@
+{
+  "appId": "app.kerf.vector",
+  "version": "1.2.0",
+  "build": 12,
+  "minBuild": 1,
+  "force": false,
+  "releasedAt": "2026-11-11T21:50:00.000Z",
+  "channel": "production",
+  "notes": {
+    "en": "OTA updates, multilingual UI, workshop calculator, Pro subscriptions.",
+    "tr": "OTA güncellemeleri, çok dilli arayüz, ölçüm hesapları, Pro abonelik.",
+    "de": "OTA-Updates, mehrsprachige UI, Werkstattrechner, Pro-Abo.",
+    "fr": "Mises à jour OTA, interface multilingue, calculateur atelier, abonnement Pro.",
+    "es": "Actualizaciones OTA, UI multilingüe, calculadora de taller, suscripción Pro.",
+    "pt": "Atualizações OTA, UI multilíngue, calculadora de oficina, assinatura Pro.",
+    "it": "Aggiornamenti OTA, UI multilingue, calcolatrice officina, abbonamento Pro.",
+    "ru": "OTA-обновления, мультиязычный UI, калькулятор цеха, подписка Pro.",
+    "zh": "OTA 更新、多语言界面、工坊计算器、Pro 订阅。",
+    "ja": "OTA更新、多言語UI、工房計算機、Proサブスク。",
+    "ar": "تحديثات OTA وواجهة متعددة اللغات وحاسبة الورشة واشتراك Pro."
+  },
+  "url": "./",
+  "bundle": null
+}

@@ -43,6 +43,16 @@ import {
   getLang,
   LANGS,
 } from "./lib/i18n.js";
+import {
+  APP_VERSION,
+  APP_BUILD,
+  checkForUpdate,
+  applyUpdate,
+  ignoreUpdate,
+  getManifestUrl,
+  setManifestUrl,
+  watchServiceWorker,
+} from "./lib/ota.js";
 
 function formatDurationI18n(sec) {
   if (!Number.isFinite(sec) || sec < 0) return "—";
@@ -77,6 +87,8 @@ function refreshLanguage(code) {
     el.textContent = t(el.getAttribute("data-i18n"));
   });
   refreshSubscriptionUI();
+  refreshOtaLabels();
+  if (latestOta) showOtaBanner(latestOta);
   if (!$("#view-calc").hidden) runCalc();
   if (!$("#view-cam").hidden) refreshCam();
   if (!$("#view-export").hidden) refreshExport();
@@ -958,6 +970,86 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+/* ---------- OTA ---------- */
+let latestOta = null;
+
+function refreshOtaLabels() {
+  const cur = $("#otaCurrent");
+  if (cur) cur.textContent = t("ota.current", { version: APP_VERSION, build: APP_BUILD });
+  const input = $("#otaManifestInput");
+  if (input && !input.dataset.dirty) input.value = getManifestUrl();
+}
+
+function showOtaBanner(result) {
+  const banner = $("#otaBanner");
+  if (!banner) return;
+  if (result.status !== "available" && result.status !== "forced") {
+    banner.hidden = true;
+    return;
+  }
+  latestOta = result;
+  banner.hidden = false;
+  banner.classList.toggle("is-force", result.status === "forced");
+  const ver = result.remote?.version || "?";
+  $("#otaBannerTitle").textContent =
+    result.status === "forced"
+      ? t("ota.banner.force", { version: ver })
+      : t("ota.banner.title", { version: ver });
+  $("#otaBannerNotes").textContent = result.notes || "";
+  $("#otaLater").hidden = result.status === "forced";
+}
+
+async function runOtaCheck({ manual = false } = {}) {
+  const statusEl = $("#otaStatus");
+  if (statusEl) statusEl.textContent = t("ota.checking");
+  const result = await checkForUpdate({ lang: getLang() });
+  latestOta = result;
+  if (statusEl) {
+    if (result.status === "upToDate") {
+      statusEl.textContent = t("ota.upToDate", { version: APP_VERSION });
+    } else if (result.status === "error") {
+      statusEl.textContent = t("ota.error", { error: result.error || "" });
+    } else {
+      statusEl.textContent = t("ota.available", { version: result.remote?.version || "?" });
+    }
+  }
+  showOtaBanner(result);
+  if (manual && result.status === "upToDate") toast(t("ota.upToDate", { version: APP_VERSION }));
+  if (manual && result.status === "error") toast(t("ota.error", { error: result.error || "" }));
+  return result;
+}
+
+$("#otaCheckBtn")?.addEventListener("click", () => runOtaCheck({ manual: true }));
+$("#otaSaveUrl")?.addEventListener("click", () => {
+  const v = $("#otaManifestInput")?.value || "";
+  setManifestUrl(v);
+  $("#otaManifestInput").dataset.dirty = "";
+  toast(t("ota.manifestSave"));
+  runOtaCheck({ manual: true });
+});
+$("#otaManifestInput")?.addEventListener("input", () => {
+  $("#otaManifestInput").dataset.dirty = "1";
+});
+$("#otaUpdate")?.addEventListener("click", async () => {
+  toast(t("ota.applying"));
+  await applyUpdate({ hard: true });
+});
+$("#otaLater")?.addEventListener("click", () => {
+  if (latestOta?.remoteBuild) ignoreUpdate(latestOta.remoteBuild);
+  $("#otaBanner").hidden = true;
+});
+
+watchServiceWorker((info) => {
+  if (info?.source === "serviceWorker") {
+    showOtaBanner({
+      status: "available",
+      remote: { version: APP_VERSION },
+      notes: "",
+      remoteBuild: APP_BUILD + 1,
+    });
+  }
+});
+
 /* boot */
 initI18n();
 fillLangSelects();
@@ -969,6 +1061,7 @@ applyPreset("sketch");
 syncLabels();
 refreshSubscriptionUI();
 applyI18n();
+refreshOtaLabels();
 document.querySelectorAll("option[data-i18n]").forEach((el) => {
   el.textContent = t(el.getAttribute("data-i18n"));
 });
@@ -982,3 +1075,13 @@ if (new URLSearchParams(location.search).has("demo")) {
 // URL ?lang=de support
 const langQ = new URLSearchParams(location.search).get("lang");
 if (langQ) refreshLanguage(langQ);
+
+// Strip ota cache-buster from URL after load
+if (new URLSearchParams(location.search).has("ota")) {
+  const clean = new URL(location.href);
+  clean.searchParams.delete("ota");
+  history.replaceState({}, "", clean.pathname + clean.search + clean.hash);
+}
+
+// Auto-check shortly after launch (non-blocking)
+setTimeout(() => runOtaCheck({ manual: false }), 1200);

@@ -47,6 +47,17 @@
     </div>
   </div>
 
+  <div id="otaBanner" class="ota-banner" hidden>
+    <div class="ota-banner-copy">
+      <strong id="otaBannerTitle">Update available</strong>
+      <p id="otaBannerNotes"></p>
+    </div>
+    <div class="ota-banner-actions">
+      <button type="button" class="btn btn-ghost" id="otaLater" data-i18n="ota.banner.later">Later</button>
+      <button type="button" class="btn btn-primary" id="otaUpdate" data-i18n="ota.banner.update">Update now</button>
+    </div>
+  </div>
+
   <div id="app" class="app">
     <header class="topbar">
       <a class="brand" href="#home" data-nav="home">
@@ -308,6 +319,20 @@
           </label>
           <button type="button" class="btn btn-primary" id="btnUpgrade" data-i18n="account.upgrade">View plans</button>
           <button type="button" class="btn btn-ghost" id="btnRestore" data-i18n="account.restore">Restore purchases</button>
+        </div>
+        <div class="account-card ota-card">
+          <p class="eyebrow" data-i18n="ota.section">Updates (OTA)</p>
+          <p id="otaCurrent" class="muted">Installed</p>
+          <p id="otaStatus" class="hint"></p>
+          <label class="field">
+            <span data-i18n="ota.manifestUrl">OTA manifest URL</span>
+            <input type="url" id="otaManifestInput" placeholder="https://cdn.example.com/kerf/ota-manifest.json">
+          </label>
+          <p class="hint" data-i18n="ota.manifestHint">Host ota-manifest.json on any HTTPS CDN for external updates.</p>
+          <div class="row-actions">
+            <button type="button" class="btn btn-secondary" id="otaSaveUrl" data-i18n="ota.manifestSave">Save URL</button>
+            <button type="button" class="btn btn-primary" id="otaCheckBtn" data-i18n="ota.check">Check for updates</button>
+          </div>
         </div>
         <ul class="settings-list">
           <li><a href="privacy.html" data-i18n="account.privacy">Privacy Policy</a></li>
