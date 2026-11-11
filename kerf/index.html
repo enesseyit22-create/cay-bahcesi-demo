@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b0d10">
-  <meta name="description" content="Laser cut file generator and CNC template maker. Photo to vector art — telefon kamerasından DXF ve SVG üretin.">
-  <meta name="keywords" content="laser cut file generator, CNC template maker, photo to vector art, DXF export, SVG line art, lazer kesim">
+  <meta name="theme-color" content="#0a0c0f">
+  <meta name="description" content="Laser cut file generator & CNC template maker. Photo to vector art — DXF/SVG, kerf, LightBurn layers.">
+  <meta name="keywords" content="laser cut file generator, CNC template maker, photo to vector art, DXF SVG, LightBurn, lazer kesim şablon">
   <meta property="og:title" content="KERF — Photo to Vector · Laser & CNC">
-  <meta property="og:description" content="Çizimi çek, temiz line-art vektöre çevir, SVG veya DXF olarak dışa aktar.">
+  <meta property="og:description" content="Çizimi çek → temiz line-art → kesime hazır SVG/DXF. CUT + ENGRAVE katmanları.">
   <title>KERF — Laser Cut File Generator · CNC Template Maker</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,129 +27,145 @@
     <nav class="top-nav" aria-label="Ana">
       <button type="button" data-nav="studio">Stüdyo</button>
       <button type="button" data-nav="cam">CAM</button>
+      <button type="button" data-nav="export">Dışa aktar</button>
     </nav>
   </header>
 
   <main>
-    <!-- LANDING -->
+    <!-- HOME -->
     <section id="view-home" class="view view-home is-active" data-view="home">
       <div class="hero">
-        <p class="eyebrow">Laser cut · CNC · Vector</p>
+        <p class="eyebrow">Laser cut file generator · CNC template maker</p>
         <h1 class="hero-brand">KERF</h1>
-        <p class="hero-lead">Telefon kamerasından çekilen çizimi anında temiz line-art vektöre çevir. SVG veya DXF olarak dışa aktar — lazer ve CNC için hazır.</p>
+        <p class="hero-lead">Telefon kamerasından çizimi al, temiz line-art vektöre çevir, LightBurn/CNC için SVG veya DXF dışa aktar — kerf, ölçek ve CUT/ENGRAVE katmanlarıyla.</p>
         <div class="hero-cta">
-          <button type="button" class="btn btn-primary" id="ctaCamera">
-            <span class="btn-ico" aria-hidden="true"></span>
-            Fotoğraf çek
-          </button>
-          <label class="btn btn-ghost" for="fileInput">
-            Galeriden yükle
-          </label>
+          <button type="button" class="btn btn-primary" id="ctaCamera">Fotoğraf çek</button>
+          <label class="btn btn-ghost" for="fileInput">Galeriden yükle</label>
+          <button type="button" class="btn btn-ghost" id="ctaDemo">Demo şablon</button>
           <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
         </div>
       </div>
 
-      <section class="strip" aria-label="Ne işe yarar">
-        <h2 class="visually-hidden">Özellikler</h2>
+      <section class="strip">
         <article class="strip-item">
-          <h3>Photo → vector</h3>
-          <p>Eşik, sadeleştirme ve kenar temizliği ile çizimi line-art’a çevirir.</p>
+          <h3>Photo → vector art</h3>
+          <p>Adaptif eşik, morfolojik temizlik, otomatik kırpma ve kontur hiyerarşisi (delikler dahil).</p>
         </article>
         <article class="strip-item">
-          <h3>Cut-ready export</h3>
-          <p>SVG ve DXF çıktı; ölçek (mm) ve kerf ofsetiyle CAM’e hazır.</p>
+          <h3>Cut + engrave</h3>
+          <p>Kapalı kesim yolları ve iskelet merkez çizgisi; kırmızı CUT / mavi ENGRAVE katmanları.</p>
         </article>
         <article class="strip-item">
-          <h3>Atölye odaklı</h3>
-          <p>Endüstriyel tasarım, hobi CNC ve lazer kesim şablonu için tek akış.</p>
+          <h3>Atölye CAM</h3>
+          <p>mm ölçek, kerf ofseti, sac boyutu, malzeme hazır ayarları — DXF (INSUNITS=mm) ve SVG.</p>
         </article>
       </section>
     </section>
 
     <!-- STUDIO -->
-    <section id="view-studio" class="view view-studio" data-view="studio" hidden>
+    <section id="view-studio" class="view" data-view="studio" hidden>
       <div class="studio-head">
         <button type="button" class="link-back" data-nav="home">← Ana</button>
         <h2>Stüdyo</h2>
         <span class="pill" id="studioStatus">Hazır</span>
       </div>
 
-      <div class="studio-stage">
-        <div class="stage-tabs" role="tablist">
-          <button type="button" class="tab is-active" data-stage="source" role="tab">Kaynak</button>
-          <button type="button" class="tab" data-stage="process" role="tab">İşle</button>
-          <button type="button" class="tab" data-stage="vector" role="tab">Vektör</button>
-        </div>
+      <div class="preset-row" role="group" aria-label="Hazır ayar">
+        <button type="button" class="chip is-active" data-preset="sketch">Eskiz foto</button>
+        <button type="button" class="chip" data-preset="print">Basılı şablon</button>
+        <button type="button" class="chip" data-preset="edge">Kenar algıla</button>
+      </div>
 
-        <div class="stage-panel is-active" data-panel="source">
-          <div class="preview-frame">
-            <canvas id="sourceCanvas"></canvas>
-            <p class="preview-empty" id="sourceEmpty">Bir çizim yükleyin veya çekin</p>
+      <div class="stage-tabs" role="tablist">
+        <button type="button" class="tab is-active" data-stage="source">1 · Kaynak</button>
+        <button type="button" class="tab" data-stage="process">2 · Line-art</button>
+        <button type="button" class="tab" data-stage="vector">3 · Vektör</button>
+      </div>
+
+      <div class="stage-panel is-active" data-panel="source">
+        <div class="preview-frame">
+          <canvas id="sourceCanvas"></canvas>
+          <p class="preview-empty" id="sourceEmpty">Çizimi yükleyin veya çekin</p>
+        </div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-primary" id="btnOpenCamera">Kamera</button>
+          <label class="btn btn-ghost" for="fileInputStudio">Yükle</label>
+          <input type="file" id="fileInputStudio" accept="image/*" capture="environment" hidden>
+          <button type="button" class="btn btn-ghost" id="btnToProcess" disabled>Line-art →</button>
+        </div>
+      </div>
+
+      <div class="stage-panel" data-panel="process" hidden>
+        <div class="preview-frame">
+          <canvas id="processCanvas"></canvas>
+        </div>
+        <div class="controls">
+          <label class="ctrl">
+            <span>Bulanıklık <b id="blurVal">1</b></span>
+            <input type="range" id="blur" min="0" max="4" step="1" value="1">
+          </label>
+          <label class="ctrl">
+            <span>Eşik (0=otomatik) <b id="thrVal">0</b></span>
+            <input type="range" id="thr" min="0" max="220" value="0">
+          </label>
+          <label class="ctrl">
+            <span>Temizlik <b id="cleanVal">1</b></span>
+            <input type="range" id="clean" min="0" max="3" step="1" value="1">
+          </label>
+          <div class="ctrl-grid">
+            <label class="ctrl check"><input type="checkbox" id="adaptive" checked><span>Adaptif eşik</span></label>
+            <label class="ctrl check"><input type="checkbox" id="autoCrop" checked><span>Otomatik kırp</span></label>
+            <label class="ctrl check"><input type="checkbox" id="invertAuto" checked><span>Otomatik ters çevir</span></label>
           </div>
-          <div class="row-actions">
-            <button type="button" class="btn btn-primary" id="btnOpenCamera">Kamera</button>
-            <label class="btn btn-ghost" for="fileInputStudio">Yükle</label>
-            <input type="file" id="fileInputStudio" accept="image/*" capture="environment" hidden>
+          <p class="hint" id="processHint">Otsu / Sauvola ile mürekkep ayrımı</p>
+        </div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-primary" id="btnVectorize">Vektörleştir</button>
+        </div>
+      </div>
+
+      <div class="stage-panel" data-panel="vector" hidden>
+        <div class="preview-frame preview-vector">
+          <div id="svgPreview" class="svg-host"></div>
+          <canvas id="cutPreview" class="cut-overlay" aria-hidden="true"></canvas>
+          <div class="legend">
+            <span class="leg cut">CUT</span>
+            <span class="leg eng">ENGRAVE</span>
           </div>
         </div>
-
-        <div class="stage-panel" data-panel="process" hidden>
-          <div class="preview-frame preview-split">
-            <canvas id="processCanvas"></canvas>
-          </div>
-          <div class="controls">
-            <label class="ctrl">
-              <span>Eşik <b id="thrVal">128</b></span>
-              <input type="range" id="thr" min="40" max="220" value="128">
-            </label>
-            <label class="ctrl">
-              <span>Bulanıklık <b id="blurVal">1</b></span>
-              <input type="range" id="blur" min="0" max="4" step="1" value="1">
-            </label>
-            <label class="ctrl check">
-              <input type="checkbox" id="invert" checked>
-              <span>Ters çevir (siyah çizgi)</span>
-            </label>
-            <label class="ctrl check">
-              <input type="checkbox" id="edgeMode">
-              <span>Kenar algılama</span>
-            </label>
-          </div>
-          <div class="row-actions">
-            <button type="button" class="btn btn-primary" id="btnVectorize">Vektörleştir</button>
-          </div>
+        <div class="controls">
+          <label class="ctrl">
+            <span>Çıktı modu</span>
+            <select id="vecMode">
+              <option value="cut">Sadece kesim (kapalı kontur)</option>
+              <option value="centerline">Sadece kazıma (merkez çizgi)</option>
+              <option value="both" selected>Kesim + kazıma</option>
+            </select>
+          </label>
+          <label class="ctrl">
+            <span>Sadeleştirme <b id="simpVal">1.2</b></span>
+            <input type="range" id="simp" min="0.3" max="4" step="0.1" value="1.2">
+          </label>
+          <label class="ctrl">
+            <span>Min. alan (gürültü) <b id="minAreaVal">80</b></span>
+            <input type="range" id="minArea" min="20" max="400" step="10" value="80">
+          </label>
+          <label class="ctrl check"><input type="checkbox" id="showCut" checked><span>Kesim taraması önizlemesi</span></label>
         </div>
-
-        <div class="stage-panel" data-panel="vector" hidden>
-          <div class="preview-frame preview-vector">
-            <div id="svgPreview" class="svg-host" aria-label="Vektör önizleme"></div>
-            <canvas id="cutPreview" class="cut-overlay" aria-hidden="true"></canvas>
-          </div>
-          <div class="controls">
-            <label class="ctrl">
-              <span>Sadeleştirme <b id="simpVal">1.2</b></span>
-              <input type="range" id="simp" min="0.4" max="4" step="0.1" value="1.2">
-            </label>
-            <label class="ctrl check">
-              <input type="checkbox" id="showCut" checked>
-              <span>Kesim yolu önizlemesi</span>
-            </label>
-          </div>
-          <div class="row-actions">
-            <button type="button" class="btn btn-ghost" data-nav="cam">CAM ayarları</button>
-            <button type="button" class="btn btn-primary" id="btnExportSvg">SVG</button>
-            <button type="button" class="btn btn-primary" id="btnExportDxf">DXF</button>
-          </div>
+        <div class="stats" id="vecStats"></div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-ghost" data-nav="cam">CAM →</button>
+          <button type="button" class="btn btn-primary" data-nav="export">Dışa aktar →</button>
         </div>
       </div>
     </section>
 
     <!-- CAM -->
-    <section id="view-cam" class="view view-cam" data-view="cam" hidden>
+    <section id="view-cam" class="view" data-view="cam" hidden>
       <div class="studio-head">
         <button type="button" class="link-back" data-nav="studio">← Stüdyo</button>
         <h2>CAM</h2>
-        <span class="pill">mm · kerf</span>
+        <span class="pill">mm · kerf · sac</span>
       </div>
 
       <div class="cam-grid">
@@ -165,39 +181,74 @@
           <span>Ofset yönü</span>
           <select id="kerfDir">
             <option value="out">Dışa (parça büyür)</option>
-            <option value="in">İçe (delik küçülür)</option>
+            <option value="in">İçe (delik küçülür / sıkı)</option>
             <option value="none">Yok</option>
           </select>
         </label>
         <label class="field">
           <span>Malzeme</span>
-          <select id="material">
-            <option>3 mm kontrplak</option>
-            <option>3 mm akrilik</option>
-            <option>1.5 mm MDF</option>
-            <option>Karton / şablon</option>
-            <option>Özel</option>
-          </select>
+          <select id="material"></select>
+        </label>
+        <label class="field">
+          <span>Sac boyutu</span>
+          <select id="sheet"></select>
+        </label>
+        <label class="field">
+          <span>Kenar boşluğu (mm)</span>
+          <input type="number" id="marginMm" value="5" min="0" step="0.5">
         </label>
       </div>
 
-      <div class="cam-meta" id="camMeta">
-        <p>Ölçek: — · Yol uzunluğu: —</p>
-      </div>
+      <div class="cam-meta" id="camMeta"><p>Önce stüdyoda vektör üretin.</p></div>
 
       <div class="preview-frame preview-vector cam-preview">
         <div id="camSvgPreview" class="svg-host"></div>
+        <div class="legend">
+          <span class="leg cut">CUT</span>
+          <span class="leg eng">ENGRAVE</span>
+        </div>
       </div>
 
       <div class="row-actions sticky-actions">
-        <button type="button" class="btn btn-ghost" id="btnApplyCam">Ölçeği uygula</button>
-        <button type="button" class="btn btn-primary" id="btnExportSvgCam">SVG indir</button>
-        <button type="button" class="btn btn-primary" id="btnExportDxfCam">DXF indir</button>
+        <button type="button" class="btn btn-ghost" id="btnApplyCam">Yenile</button>
+        <button type="button" class="btn btn-primary" data-nav="export">Dışa aktar →</button>
+      </div>
+    </section>
+
+    <!-- EXPORT -->
+    <section id="view-export" class="view" data-view="export" hidden>
+      <div class="studio-head">
+        <button type="button" class="link-back" data-nav="cam">← CAM</button>
+        <h2>Dışa aktar</h2>
+        <span class="pill">SVG · DXF</span>
+      </div>
+
+      <div class="export-cards">
+        <article class="export-card">
+          <h3>SVG · LightBurn / Glowforge</h3>
+          <p>Kırmızı = CUT, mavi = ENGRAVE. Ölçüler mm. LightBurn renk katmanlarına otomatik eşlenir.</p>
+          <button type="button" class="btn btn-primary" id="btnExportSvg">SVG indir</button>
+        </article>
+        <article class="export-card">
+          <h3>DXF · CAD / CNC</h3>
+          <p>R12 POLYLINE, katmanlar <code>CUT</code> / <code>ENGRAVE</code>, <code>$INSUNITS=mm</code>, Y-up.</p>
+          <button type="button" class="btn btn-primary" id="btnExportDxf">DXF indir</button>
+        </article>
+        <article class="export-card">
+          <h3>İkisini birden</h3>
+          <p>Aynı iş için hem SVG hem DXF paketini indir.</p>
+          <button type="button" class="btn btn-ghost" id="btnExportBoth">SVG + DXF</button>
+        </article>
+      </div>
+
+      <div class="cam-meta" id="exportMeta"><p>—</p></div>
+      <div class="checklist">
+        <h3>Kesim öncesi kontrol</h3>
+        <ul id="exportChecks"></ul>
       </div>
     </section>
   </main>
 
-  <!-- Camera modal -->
   <dialog id="camDialog" class="cam-dialog">
     <div class="cam-dialog-inner">
       <video id="liveVideo" playsinline autoplay muted></video>
