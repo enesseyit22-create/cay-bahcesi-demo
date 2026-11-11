@@ -1,4 +1,4 @@
-const CACHE = "kerf-v1.4";
+const CACHE = "kerf-v1.5";
 const ASSETS = [
   "./",
   "./index.html",
@@ -15,6 +15,8 @@ const ASSETS = [
   "./lib/i18n.js",
   "./lib/locales.js",
   "./lib/ota.js",
+  "./lib/native-boot.js",
+  "./lib/iap.js",
 ];
 
 self.addEventListener("install", (event) => {

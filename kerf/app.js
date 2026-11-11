@@ -20,13 +20,13 @@ import {
   loadUsage,
   recordExport,
   canExport,
-  purchase,
-  restorePurchases,
   formatPrice,
   onboardingDone,
   setOnboardingDone,
   saveSubscription,
 } from "./lib/subscription.js";
+import { purchasePlan, restorePlan } from "./lib/iap.js";
+import { bootNative } from "./lib/native-boot.js";
 import {
   LASER_PRESETS,
   summarizeJobCalc,
@@ -199,7 +199,7 @@ function renderPlanCards() {
     btn.addEventListener("click", async () => {
       try {
         btn.disabled = true;
-        await purchase(plan.id, state.billing);
+        await purchasePlan(plan.id, state.billing);
         refreshSubscriptionUI();
         toast(t("toast.proActive", { plan: name }));
         if (plan.id !== "free") paywall.close();
@@ -299,12 +299,12 @@ $("#btnOpenPaywall").addEventListener("click", openPaywall);
 $("#btnUpgrade").addEventListener("click", openPaywall);
 $("#paywallClose").addEventListener("click", () => paywall.close());
 $("#paywallRestore").addEventListener("click", async () => {
-  const r = await restorePurchases();
+  const r = await restorePlan();
   refreshSubscriptionUI();
   toast(r.message);
 });
 $("#btnRestore").addEventListener("click", async () => {
-  const r = await restorePurchases();
+  const r = await restorePlan();
   refreshSubscriptionUI();
   toast(r.message);
 });
@@ -1064,6 +1064,12 @@ applyI18n();
 refreshOtaLabels();
 document.querySelectorAll("option[data-i18n]").forEach((el) => {
   el.textContent = t(el.getAttribute("data-i18n"));
+});
+
+bootNative().catch(() => {});
+window.addEventListener("kerf:resume", () => {
+  runOtaCheck({ manual: false });
+  refreshSubscriptionUI();
 });
 
 if (new URLSearchParams(location.search).has("demo")) {

@@ -1,0 +1,65 @@
+{
+  "apple": {
+    "subscriptionGroup": "KERF Premium",
+    "products": [
+      {
+        "id": "kerf_pro_monthly",
+        "type": "auto_renewable",
+        "referenceName": "KERF Pro Monthly",
+        "priceTierHint": "TRY 149 / USD equivalent",
+        "entitlement": "pro"
+      },
+      {
+        "id": "kerf_pro_yearly",
+        "type": "auto_renewable",
+        "referenceName": "KERF Pro Yearly",
+        "priceTierHint": "TRY 1190 / USD equivalent",
+        "entitlement": "pro"
+      },
+      {
+        "id": "kerf_workshop_monthly",
+        "type": "auto_renewable",
+        "referenceName": "KERF Workshop Monthly",
+        "priceTierHint": "TRY 349 / USD equivalent",
+        "entitlement": "workshop"
+      },
+      {
+        "id": "kerf_workshop_yearly",
+        "type": "auto_renewable",
+        "referenceName": "KERF Workshop Yearly",
+        "priceTierHint": "TRY 2990 / USD equivalent",
+        "entitlement": "workshop"
+      }
+    ]
+  },
+  "google": {
+    "products": [
+      {
+        "productId": "kerf_pro",
+        "type": "subscription",
+        "basePlans": [
+          { "basePlanId": "monthly", "offerId": null, "billingPeriod": "P1M" },
+          { "basePlanId": "yearly", "offerId": null, "billingPeriod": "P1Y" }
+        ],
+        "mappedAppProductIds": ["kerf_pro_monthly", "kerf_pro_yearly"],
+        "entitlement": "pro"
+      },
+      {
+        "productId": "kerf_workshop",
+        "type": "subscription",
+        "basePlans": [
+          { "basePlanId": "monthly", "billingPeriod": "P1M" },
+          { "basePlanId": "yearly", "billingPeriod": "P1Y" }
+        ],
+        "mappedAppProductIds": ["kerf_workshop_monthly", "kerf_workshop_yearly"],
+        "entitlement": "workshop"
+      }
+    ]
+  },
+  "revenueCat": {
+    "entitlements": ["pro", "workshop"],
+    "offerings": {
+      "default": ["kerf_pro_monthly", "kerf_pro_yearly", "kerf_workshop_monthly", "kerf_workshop_yearly"]
+    }
+  }
+}

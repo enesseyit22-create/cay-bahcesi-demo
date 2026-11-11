@@ -1,19 +1,26 @@
 {
   "appId": "app.kerf.vector",
   "appName": "KERF",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
     "androidScheme": "https"
   },
   "plugins": {
     "SplashScreen": {
+      "launchAutoHide": true,
       "backgroundColor": "#eef3f8",
-      "launchAutoHide": true
+      "showSpinner": false
     },
-    "CapacitorUpdater": {
-      "autoUpdate": false,
-      "appId": "app.kerf.vector",
-      "version": "1.2.0"
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#eef3f8"
     }
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "preferredContentMode": "mobile"
   }
 }

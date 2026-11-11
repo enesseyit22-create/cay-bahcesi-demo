@@ -1,0 +1,14 @@
+KERF, telefon fotoğraflarındaki eskizleri lazer ve CNC için kesime hazır vektöre dönüştürür.
+
+• Fotoğraf → çizgi sanat → CUT / ENGRAVE katmanları
+• SVG & DXF (mm) export, LightBurn uyumlu renkler
+• Kerf, levha ölçüsü ve atölye maliyet hesabı
+• İşlem cihazda — fotoğrafların telefonda kalır
+• 11 dil (Türkçe, İngilizce, Almanca, Arapça RTL dahil)
+
+Planlar
+• Ücretsiz — stüdyoyu dene
+• Pro — sınırsız export ve preset
+• Workshop — atölye hesabı, teklif araçları, öncelikli OTA
+
+Gizlilik: temel işlem için hesap gerekmez. Uygulama içi Gizlilik Politikası’na bakın.

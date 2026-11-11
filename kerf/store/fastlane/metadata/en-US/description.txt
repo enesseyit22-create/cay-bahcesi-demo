@@ -1,0 +1,11 @@
+KERF turns phone photos of sketches into clean cut-ready vectors for laser and CNC.
+
+• Capture or import a drawing
+• Adaptive line-art cleaning
+• CUT + ENGRAVE layers
+• mm scale, kerf offset, sheet nesting
+• Workshop calculator (time & cost)
+• Export SVG (LightBurn) and DXF (CAD/CNC)
+• 11 languages
+
+Subscriptions unlock unlimited DXF and watermark-free exports.
