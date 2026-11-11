@@ -12,6 +12,30 @@ import {
   buildJob,
   buildExportSvg,
 } from "./lib/cam.js";
+import {
+  PLANS,
+  loadSubscription,
+  getPlan,
+  getLimits,
+  loadUsage,
+  recordExport,
+  canExport,
+  purchase,
+  restorePurchases,
+  formatPrice,
+  onboardingDone,
+  setOnboardingDone,
+  saveSubscription,
+} from "./lib/subscription.js";
+import {
+  LASER_PRESETS,
+  summarizeJobCalc,
+  formatDuration,
+  mmToInch,
+  inchToMm,
+  pxAtDpiToMm,
+  scaleFromWidth,
+} from "./lib/calc.js";
 
 const state = {
   sourceReady: false,
@@ -23,6 +47,7 @@ const state = {
   stats: {},
   job: null,
   preset: "sketch",
+  billing: "yearly",
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -36,66 +61,212 @@ const cutPreview = $("#cutPreview");
 const camDialog = $("#camDialog");
 const liveVideo = $("#liveVideo");
 const snapCanvas = $("#snapCanvas");
+const paywall = $("#paywall");
 
 let mediaStream = null;
 let overlayRaf = 0;
 
-/* ---------- Hero ambience ---------- */
-(function heroAnim() {
-  const canvas = $("#heroCanvas");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  let w, h, t0;
-  const paths = [];
+/* ---------- UI chrome ---------- */
+function toast(msg) {
+  const el = $("#toast");
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => {
+    el.hidden = true;
+  }, 2800);
+}
 
-  function resize() {
-    w = canvas.width = window.innerWidth * devicePixelRatio;
-    h = canvas.height = window.innerHeight * devicePixelRatio;
-    canvas.style.width = window.innerWidth + "px";
-    canvas.style.height = window.innerHeight + "px";
-    paths.length = 0;
-    for (let i = 0; i < 6; i++) {
-      const pts = [];
-      const cx = w * (0.12 + Math.random() * 0.76);
-      const cy = h * (0.18 + Math.random() * 0.55);
-      const r = Math.min(w, h) * (0.07 + Math.random() * 0.16);
-      const n = 3 + ((Math.random() * 5) | 0);
-      for (let k = 0; k <= n; k++) {
-        const a = (k / n) * Math.PI * 2 - Math.PI / 2;
-        const j = 0.82 + Math.random() * 0.28;
-        pts.push({ x: cx + Math.cos(a) * r * j, y: cy + Math.sin(a) * r * j });
+function refreshSubscriptionUI() {
+  const sub = loadSubscription();
+  const plan = getPlan(sub.planId);
+  const usage = loadUsage();
+  const limits = getLimits();
+  const remain = Number.isFinite(limits.exportsPerDay)
+    ? Math.max(0, limits.exportsPerDay - usage.exports)
+    : "∞";
+
+  $("#planBadge").textContent = plan.name;
+  $("#metricExports").textContent = String(usage.exports);
+  $("#metricRemain").textContent = String(remain);
+  $("#metricPlan").textContent = plan.id === "free" ? "Free" : plan.name;
+  $("#exportPlanPill").textContent = plan.name;
+  $("#accountPlanName").textContent = plan.name;
+  $("#accountPlanMeta").textContent = `${sub.source === "sandbox" ? "Sandbox" : "Store"} · ${
+    sub.billing || "—"
+  } · ${sub.productId || "kerf_free"}`;
+
+  const locked = !limits.dxf;
+  $("#cardDxf").classList.toggle("is-locked", locked);
+  $("#cardBoth").classList.toggle("is-locked", locked);
+  renderPlanCards();
+}
+
+function renderPlanCards() {
+  const host = $("#planCards");
+  if (!host) return;
+  const current = loadSubscription().planId;
+  host.innerHTML = "";
+  for (const plan of PLANS) {
+    const price =
+      plan.id === "free"
+        ? "Ücretsiz"
+        : state.billing === "yearly"
+          ? `${formatPrice(plan.priceYearly)} / yıl`
+          : `${formatPrice(plan.priceMonthly)} / ay`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `plan-card${plan.id === "pro" ? " is-featured" : ""}${
+      plan.id === current ? " is-current" : ""
+    }`;
+    btn.innerHTML = `
+      <div class="row">
+        <h3>${plan.name}</h3>
+        ${plan.badge ? `<span class="plan-badge">${plan.badge}</span>` : `<span></span>`}
+      </div>
+      <div class="price">${price}</div>
+      <p class="muted" style="margin:6px 0 0">${plan.blurb}</p>
+      <ul>${plan.features.map((f) => `<li>${f}</li>`).join("")}</ul>
+    `;
+    btn.addEventListener("click", async () => {
+      try {
+        btn.disabled = true;
+        await purchase(plan.id, state.billing);
+        refreshSubscriptionUI();
+        toast(`${plan.name} aktif (sandbox)`);
+        if (plan.id !== "free") paywall.close();
+      } catch (e) {
+        toast(e.message || "Satın alma başarısız");
+      } finally {
+        btn.disabled = false;
       }
-      paths.push({ pts, phase: Math.random() * Math.PI * 2, speed: 0.3 + Math.random() * 0.45 });
-    }
+    });
+    host.appendChild(btn);
+  }
+}
+
+function openPaywall() {
+  refreshSubscriptionUI();
+  paywall.showModal();
+}
+
+/* ---------- Onboarding ---------- */
+let onbIndex = 0;
+function setupOnboarding() {
+  const root = $("#onboarding");
+  const dots = $("#onbDots");
+  dots.innerHTML = "";
+  for (let i = 0; i < 3; i++) {
+    const s = document.createElement("span");
+    if (i === 0) s.classList.add("is-active");
+    dots.appendChild(s);
+  }
+  if (!onboardingDone()) root.hidden = false;
+
+  function paint() {
+    document.querySelectorAll(".onb-slide").forEach((el, i) => {
+      el.classList.toggle("is-active", i === onbIndex);
+    });
+    [...dots.children].forEach((d, i) => d.classList.toggle("is-active", i === onbIndex));
+    $("#onbNext").textContent = onbIndex >= 2 ? "Başla" : "Devam";
   }
 
-  function frame(ts) {
-    if (!t0) t0 = ts;
-    const t = (ts - t0) / 1000;
-    ctx.clearRect(0, 0, w, h);
-    ctx.lineWidth = 1.2 * devicePixelRatio;
-    for (const p of paths) {
-      const prog = (Math.sin(t * p.speed + p.phase) * 0.5 + 0.5) * 0.85 + 0.15;
-      const n = Math.max(2, Math.floor(p.pts.length * prog));
-      ctx.beginPath();
-      ctx.strokeStyle = `rgba(94,200,255,${0.1 + prog * 0.28})`;
-      ctx.moveTo(p.pts[0].x, p.pts[0].y);
-      for (let i = 1; i < n; i++) ctx.lineTo(p.pts[i].x, p.pts[i].y);
-      ctx.stroke();
-      const head = p.pts[n - 1];
-      ctx.beginPath();
-      ctx.fillStyle = "rgba(232,163,23,0.9)";
-      ctx.arc(head.x, head.y, 2.4 * devicePixelRatio, 0, Math.PI * 2);
-      ctx.fill();
+  $("#onbNext").addEventListener("click", () => {
+    if (onbIndex >= 2) {
+      setOnboardingDone();
+      root.hidden = true;
+      return;
     }
-    requestAnimationFrame(frame);
-  }
-  window.addEventListener("resize", resize);
-  resize();
-  requestAnimationFrame(frame);
-})();
+    onbIndex += 1;
+    paint();
+  });
+  $("#onbSkip").addEventListener("click", () => {
+    setOnboardingDone();
+    root.hidden = true;
+  });
+  paint();
+}
 
-/* ---------- Material / sheet selects ---------- */
+/* ---------- Nav ---------- */
+function showView(name) {
+  document.querySelectorAll(".view").forEach((el) => {
+    const on = el.dataset.view === name;
+    el.hidden = !on;
+    el.classList.toggle("is-active", on);
+  });
+  document.querySelectorAll(".tabbar-item").forEach((el) => {
+    el.classList.toggle("is-active", el.dataset.nav === name);
+  });
+  if (name === "cam") refreshCam();
+  if (name === "export") refreshExport();
+  if (name === "calc") {
+    fillCalcFromJob(false);
+    runCalc();
+  }
+  if (name === "account") refreshSubscriptionUI();
+}
+
+function showStage(name) {
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("is-active", t.dataset.stage === name));
+  document.querySelectorAll(".stage-panel").forEach((p) => {
+    const on = p.dataset.panel === name;
+    p.hidden = !on;
+    p.classList.toggle("is-active", on);
+  });
+}
+
+document.querySelectorAll("[data-nav]").forEach((el) => {
+  el.addEventListener("click", (e) => {
+    e.preventDefault();
+    showView(el.dataset.nav);
+  });
+});
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showStage(t.dataset.stage)));
+
+$("#btnOpenPaywall").addEventListener("click", openPaywall);
+$("#btnUpgrade").addEventListener("click", openPaywall);
+$("#paywallClose").addEventListener("click", () => paywall.close());
+$("#paywallRestore").addEventListener("click", async () => {
+  const r = await restorePurchases();
+  refreshSubscriptionUI();
+  toast(r.message);
+});
+$("#btnRestore").addEventListener("click", async () => {
+  const r = await restorePurchases();
+  refreshSubscriptionUI();
+  toast(r.message);
+});
+
+document.querySelectorAll("[data-billing]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-billing]").forEach((b) => b.classList.remove("is-active"));
+    btn.classList.add("is-active");
+    state.billing = btn.dataset.billing;
+    renderPlanCards();
+  });
+});
+
+$("#btnResetOnb").addEventListener("click", () => {
+  localStorage.removeItem("kerf.onboarding.v1");
+  onbIndex = 0;
+  $("#onboarding").hidden = false;
+  setupOnboarding();
+});
+
+$("#btnSandboxFree").addEventListener("click", () => {
+  saveSubscription({
+    planId: "free",
+    billing: "monthly",
+    status: "active",
+    source: "sandbox",
+    updatedAt: Date.now(),
+    expiresAt: null,
+  });
+  refreshSubscriptionUI();
+  toast("Free plana dönüldü");
+});
+
+/* ---------- Material selects ---------- */
 const materialSel = $("#material");
 const sheetSel = $("#sheet");
 MATERIALS.forEach((m) => {
@@ -112,7 +283,6 @@ SHEET_PRESETS.forEach((s) => {
 });
 materialSel.value = "ply3";
 sheetSel.value = "300x200";
-
 materialSel.addEventListener("change", () => {
   const m = MATERIALS.find((x) => x.id === materialSel.value);
   if (m) {
@@ -121,33 +291,6 @@ materialSel.addEventListener("change", () => {
     if (match) sheetSel.value = match.id;
   }
   refreshCam();
-});
-
-/* ---------- Nav / stages ---------- */
-function showView(name) {
-  document.querySelectorAll(".view").forEach((el) => {
-    const on = el.dataset.view === name;
-    el.hidden = !on;
-    el.classList.toggle("is-active", on);
-  });
-  if (name === "cam") refreshCam();
-  if (name === "export") refreshExport();
-}
-
-function showStage(name) {
-  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("is-active", t.dataset.stage === name));
-  document.querySelectorAll(".stage-panel").forEach((p) => {
-    const on = p.dataset.panel === name;
-    p.hidden = !on;
-    p.classList.toggle("is-active", on);
-  });
-}
-
-document.querySelectorAll("[data-nav]").forEach((el) => {
-  el.addEventListener("click", () => showView(el.dataset.nav));
-});
-document.querySelectorAll(".tab").forEach((t) => {
-  t.addEventListener("click", () => showStage(t.dataset.stage));
 });
 
 /* ---------- Presets ---------- */
@@ -167,22 +310,22 @@ function applyPreset(name) {
     $("#blur").value = 1;
     $("#thr").value = 0;
     $("#clean").value = 1;
-    $("#vecMode").value = "both";
-    $("#processHint").textContent = "Eskiz: Sauvola adaptif eşik + temizlik";
+    $("#vecMode").value = "cut";
+    $("#processHint").textContent = "Eskiz · Sauvola adaptif";
   } else if (name === "print") {
     $("#adaptive").checked = false;
     $("#blur").value = 0;
     $("#thr").value = 0;
     $("#clean").value = 1;
     $("#vecMode").value = "cut";
-    $("#processHint").textContent = "Basılı şablon: Otsu global eşik, kapalı kesim";
+    $("#processHint").textContent = "Şablon · Otsu";
   } else {
     $("#adaptive").checked = false;
     $("#blur").value = 1;
     $("#thr").value = 0;
     $("#clean").value = 0;
     $("#vecMode").value = "centerline";
-    $("#processHint").textContent = "Kenar: Sobel mag + merkez çizgi kazıma";
+    $("#processHint").textContent = "Kenar · Sobel + iskelet";
   }
   syncLabels();
 }
@@ -232,7 +375,7 @@ async function openCamera() {
     liveVideo.srcObject = mediaStream;
     camDialog.showModal();
   } catch {
-    studioStatus.textContent = "Kamera yok — galeri kullan";
+    toast("Kamera yok — galeri kullanın");
     $("#fileInput").click();
   }
 }
@@ -261,7 +404,7 @@ $("#btnSnap").addEventListener("click", async () => {
   await ingestImage(img);
 });
 
-/* ---------- Process ---------- */
+/* ---------- Process / Vector ---------- */
 function processOpts() {
   const mode = state.preset === "edge" ? "edge" : state.preset === "print" ? "print" : "sketch";
   return {
@@ -283,7 +426,7 @@ function reprocess() {
   state.width = width;
   state.height = height;
   paintBinary(processCanvas, binary, width, height);
-  $("#processHint").textContent = `Eşik≈${Math.round(threshold)} · ${width}×${height} px · mürekkep ayrıldı`;
+  $("#processHint").textContent = `Eşik≈${Math.round(threshold)} · ${width}×${height}px`;
 }
 
 ["blur", "thr", "clean", "adaptive", "autoCrop", "invertAuto"].forEach((id) => {
@@ -297,28 +440,35 @@ function runVectorize() {
   if (!state.binary) return;
   studioStatus.textContent = "Vektör…";
   syncLabels();
-  const result = vectorize(state.binary, state.width, state.height, {
-    simplify: +$("#simp").value,
-    minArea: +$("#minArea").value,
-    mode: $("#vecMode").value,
-  });
-  state.cut = result.cut;
-  state.engrave = result.engrave;
-  state.stats = result.stats;
-  svgPreview.innerHTML = buildPreviewSvg({
-    cut: result.cut,
-    engrave: result.engrave,
-    width: result.width,
-    height: result.height,
-  });
-  const c = result.stats.cutPaths || 0;
-  const e = result.stats.engravePaths || 0;
-  const holes = result.stats.holes || 0;
-  studioStatus.textContent = `${c} cut · ${e} eng`;
-  $("#vecStats").textContent = `CUT yolları: ${c} · delik: ${holes} · ENGRAVE: ${e} · tuval ${result.width}×${result.height} px`;
-  showStage("vector");
-  buildJobState();
-  requestAnimationFrame(() => startOverlay());
+  const mode = $("#vecMode").value;
+  const simplify = +$("#simp").value;
+  const minArea = +$("#minArea").value;
+  // Yield so UI can paint status before heavy work
+  setTimeout(() => {
+    const t0 = performance.now();
+    const result = vectorize(state.binary, state.width, state.height, {
+      simplify,
+      minArea,
+      mode,
+    });
+    state.cut = result.cut;
+    state.engrave = result.engrave;
+    state.stats = result.stats;
+    svgPreview.innerHTML = buildPreviewSvg({
+      cut: result.cut,
+      engrave: result.engrave,
+      width: result.width,
+      height: result.height,
+    });
+    const c = result.stats.cutPaths || 0;
+    const e = result.stats.engravePaths || 0;
+    const ms = Math.round(performance.now() - t0);
+    studioStatus.textContent = `${c} cut · ${e} eng`;
+    $("#vecStats").textContent = `CUT ${c} · delik ${result.stats.holes || 0} · ENGRAVE ${e} · ${result.width}×${result.height}px · ${ms} ms`;
+    showStage("vector");
+    buildJobState();
+    requestAnimationFrame(() => startOverlay());
+  }, 30);
 }
 
 $("#btnVectorize").addEventListener("click", runVectorize);
@@ -331,10 +481,7 @@ $("#btnVectorize").addEventListener("click", runVectorize);
     if (state.binary) runVectorize();
   });
 });
-$("#showCut").addEventListener("change", () => {
-  if ($("#showCut").checked) startOverlay();
-  else stopOverlay();
-});
+$("#showCut").addEventListener("change", () => ($("#showCut").checked ? startOverlay() : stopOverlay()));
 
 function stopOverlay() {
   cancelAnimationFrame(overlayRaf);
@@ -347,8 +494,7 @@ function startOverlay() {
   if (!$("#showCut").checked) return;
   const tick = () => {
     const host = svgPreview;
-    const svg = host.querySelector("svg");
-    if (!svg || !$("#showCut").checked) return;
+    if (!host.querySelector("svg") || !$("#showCut").checked) return;
     const rect = host.getBoundingClientRect();
     const w = Math.max(1, Math.floor(rect.width * devicePixelRatio));
     const h = Math.max(1, Math.floor(rect.height * devicePixelRatio));
@@ -364,9 +510,9 @@ function startOverlay() {
     ctx.clearRect(0, 0, w, h);
     const y = (performance.now() / 16) % h;
     const g = ctx.createLinearGradient(0, y - 24, 0, y + 24);
-    g.addColorStop(0, "rgba(232,163,23,0)");
-    g.addColorStop(0.5, "rgba(232,163,23,0.32)");
-    g.addColorStop(1, "rgba(232,163,23,0)");
+    g.addColorStop(0, "rgba(13,122,120,0)");
+    g.addColorStop(0.5, "rgba(13,122,120,0.35)");
+    g.addColorStop(1, "rgba(13,122,120,0)");
     ctx.fillStyle = g;
     ctx.fillRect(0, y - 24, w, 48);
     overlayRaf = requestAnimationFrame(tick);
@@ -411,13 +557,12 @@ function refreshCam() {
   el.classList.toggle("warn", !job.fits);
   const mat = MATERIALS.find((m) => m.id === materialSel.value)?.label || "";
   el.innerHTML = `<p>
-    Ölçek: 1 px → ${job.scale.toFixed(4)} mm<br>
-    Parça: ${job.widthMm.toFixed(2)} × ${job.heightMm.toFixed(2)} mm<br>
-    Sac: ${job.sheetW} × ${job.sheetH} mm ${job.fits ? "· sığar" : "· SIĞMIYOR — genişliği veya sacı büyütün"}<br>
-    CUT yolu: ${job.cutLength.toFixed(0)} mm · ENGRAVE: ${job.engraveLength.toFixed(0)} mm<br>
-    Malzeme: ${mat} · kerf ${$("#kerfMm").value} mm
+    Ölçek 1px → ${job.scale.toFixed(4)} mm<br>
+    Parça ${job.widthMm.toFixed(2)} × ${job.heightMm.toFixed(2)} mm<br>
+    Sac ${job.sheetW} × ${job.sheetH} mm ${job.fits ? "· sığar" : "· SIĞMIYOR"}<br>
+    CUT ${job.cutLength.toFixed(0)} mm · ENGRAVE ${job.engraveLength.toFixed(0)} mm<br>
+    ${mat} · kerf ${$("#kerfMm").value} mm
   </p>`;
-
   const svg = buildExportSvg({
     cut: job.cut,
     engrave: job.engrave,
@@ -426,18 +571,18 @@ function refreshCam() {
     sheetW: job.sheetW,
     sheetH: job.sheetH,
   });
-  // preview: tint sheet border
   camSvgPreview.innerHTML = svg
     .replace(/^<\?xml[^>]*>/, "")
     .replace(
       "<desc>",
-      `<rect x="0" y="0" width="${job.sheetW}" height="${job.sheetH}" fill="none" stroke="rgba(138,151,168,0.35)" stroke-width="0.4"/><desc>`
+      `<rect x="0" y="0" width="${job.sheetW}" height="${job.sheetH}" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="0.4"/><desc>`
     );
 }
 
 function refreshExport() {
-  const job = buildJobState();
   refreshCam();
+  refreshSubscriptionUI();
+  const job = state.job;
   const meta = $("#exportMeta");
   const list = $("#exportChecks");
   list.innerHTML = "";
@@ -445,14 +590,15 @@ function refreshExport() {
     meta.innerHTML = "<p>Vektör yok.</p>";
     return;
   }
-  meta.innerHTML = `<p>Hazır paket · CUT ${job.cut.length} · ENGRAVE ${job.engrave.length} · ${job.widthMm.toFixed(1)}×${job.heightMm.toFixed(1)} mm</p>`;
+  const gate = canExport("svg");
+  meta.innerHTML = `<p>CUT ${job.cut.length} · ENGRAVE ${job.engrave.length} · ${job.widthMm.toFixed(1)}×${job.heightMm.toFixed(1)} mm · kalan hak: ${
+    Number.isFinite(gate.remaining) ? gate.remaining : "∞"
+  }</p>`;
   const checks = [
-    { ok: job.cut.length + job.engrave.length > 0, text: "En az bir yol var" },
-    { ok: job.fits, text: job.fits ? "Parça saca sığıyor" : "Parça sacdan taşuyor" },
-    { ok: job.cutLength > 0 || job.engraveLength > 0, text: "Yol uzunluğu hesaplandı" },
-    { ok: +$("#kerfMm").value >= 0, text: `Kerf ofseti: ${$("#kerfMm").value} mm` },
-    { ok: true, text: "SVG: CUT=#FF0000 · ENGRAVE=#0000FF (LightBurn)" },
-    { ok: true, text: "DXF: katman CUT/ENGRAVE · INSUNITS=mm" },
+    { ok: job.cut.length + job.engrave.length > 0, text: "Yol var" },
+    { ok: job.fits, text: job.fits ? "Saca sığıyor" : "Sacdan taşıyor" },
+    { ok: getLimits().dxf, text: getLimits().dxf ? "DXF açık (Pro)" : "DXF kilitli — Pro gerekir" },
+    { ok: gate.ok, text: gate.ok ? "Export kotası uygun" : gate.message },
   ];
   for (const c of checks) {
     const li = document.createElement("li");
@@ -466,12 +612,11 @@ function refreshExport() {
   $("#" + id).addEventListener("change", refreshCam);
   $("#" + id).addEventListener("input", refreshCam);
 });
-$("#btnApplyCam").addEventListener("click", refreshCam);
 
 function currentSvg() {
   const job = buildJobState();
   if (!job) return null;
-  return buildExportSvg({
+  let svg = buildExportSvg({
     cut: job.cut,
     engrave: job.engrave,
     widthMm: job.widthMm,
@@ -480,39 +625,227 @@ function currentSvg() {
     sheetH: job.sheetH,
     title: "KERF cut job",
   });
+  if (!getLimits().noWatermark) {
+    svg = svg.replace(
+      "</svg>",
+      `<text x="4" y="${(job.sheetH - 3).toFixed(2)}" font-size="3.2" fill="#888888" font-family="sans-serif">KERF Free</text></svg>`
+    );
+  }
+  return svg;
 }
 
 function currentDxf() {
   const job = buildJobState();
   if (!job) return null;
-  return pathsToDxf({
-    cut: job.cut,
-    engrave: job.engrave,
-    height: job.sheetH,
-    flipY: true,
+  return pathsToDxf({ cut: job.cut, engrave: job.engrave, height: job.sheetH, flipY: true });
+}
+
+async function gatedExport(kind, run) {
+  const gate = canExport(kind);
+  if (!gate.ok) {
+    toast(gate.message);
+    openPaywall();
+    return;
+  }
+  await run();
+  recordExport();
+  refreshSubscriptionUI();
+  toast("İndirme başladı");
+}
+
+$("#btnExportSvg").addEventListener("click", () =>
+  gatedExport("svg", async () => {
+    const svg = currentSvg();
+    if (!svg) return;
+    downloadText(stampName("kerf_cut", "svg"), svg, "image/svg+xml");
+  })
+);
+
+$("#btnExportDxf").addEventListener("click", () =>
+  gatedExport("dxf", async () => {
+    const dxf = currentDxf();
+    if (!dxf) return;
+    downloadText(stampName("kerf_cut", "dxf"), dxf, "application/dxf");
+  })
+);
+
+$("#btnExportBoth").addEventListener("click", () =>
+  gatedExport("both", async () => {
+    const svg = currentSvg();
+    const dxf = currentDxf();
+    if (!svg || !dxf) return;
+    downloadText(stampName("kerf_cut", "svg"), svg, "image/svg+xml");
+    setTimeout(() => downloadText(stampName("kerf_cut", "dxf"), dxf, "application/dxf"), 250);
+  })
+);
+
+/* ---------- Workshop calculator ---------- */
+const laserSel = $("#cLaserPreset");
+LASER_PRESETS.forEach((p) => {
+  const o = document.createElement("option");
+  o.value = p.id;
+  o.textContent = `${p.label} · P${p.power} S${p.speed}`;
+  laserSel.appendChild(o);
+});
+laserSel.value = "ply3";
+
+function fillCalcFromJob(toastOnEmpty = true) {
+  const job = buildJobState();
+  if (!job) {
+    if (toastOnEmpty) toast("Önce stüdyoda vektör / CAM oluşturun");
+    return false;
+  }
+  $("#cPartW").value = job.widthMm.toFixed(2);
+  $("#cPartH").value = job.heightMm.toFixed(2);
+  $("#cKerf").value = $("#kerfMm").value;
+  $("#cKerfDir").value = $("#kerfDir").value;
+  $("#cSheetW").value = job.sheetW;
+  $("#cSheetH").value = job.sheetH;
+  $("#cMargin").value = $("#marginMm").value;
+  $("#cCutLen").value = job.cutLength.toFixed(1);
+  $("#cEngLen").value = job.engraveLength.toFixed(1);
+  $("#cCutPaths").value = job.cut.length;
+  $("#cPxW").value = state.width || 0;
+  // rough travel estimate: 15% of path
+  $("#cTravel").value = ((job.cutLength + job.engraveLength) * 0.12).toFixed(0);
+  return true;
+}
+
+function applyLaserPreset() {
+  const p = LASER_PRESETS.find((x) => x.id === laserSel.value);
+  if (!p) return;
+  $("#cCutSpeed").value = p.speed;
+  $("#cPierce").value = p.pierce;
+  $("#cPasses").value = p.passes;
+  // engrave typically faster
+  $("#cEngSpeed").value = Math.max(p.speed * 6, 40);
+  toast(`${p.label} · güç ~%${p.power} (referans)`);
+  runCalc();
+}
+
+function runCalc() {
+  const partW = +$("#cPartW").value || 0;
+  const partH = +$("#cPartH").value || 0;
+  const pxW = +$("#cPxW").value || 0;
+  const dpi = +$("#cDpi").value || 0;
+
+  let scaleNote = "";
+  if (pxW > 0 && partW > 0) {
+    const s = scaleFromWidth(pxW, partW);
+    scaleNote = `Ölçek ${s.toFixed(4)} mm/px`;
+  } else if (pxW > 0 && dpi > 0) {
+    scaleNote = `DPI ${dpi}: ${pxW}px ≈ ${pxAtDpiToMm(pxW, dpi).toFixed(2)} mm`;
+  }
+
+  const summary = summarizeJobCalc({
+    partW,
+    partH,
+    sheetW: +$("#cSheetW").value || 0,
+    sheetH: +$("#cSheetH").value || 0,
+    margin: +$("#cMargin").value || 0,
+    gap: +$("#cGap").value || 0,
+    kerfMm: +$("#cKerf").value || 0,
+    kerfDir: $("#cKerfDir").value,
+    cutLenMm: +$("#cCutLen").value || 0,
+    engraveLenMm: +$("#cEngLen").value || 0,
+    cutSpeedMms: +$("#cCutSpeed").value || 1,
+    engraveSpeedMms: +$("#cEngSpeed").value || 1,
+    pierceSec: +$("#cPierce").value || 0,
+    cutPaths: +$("#cCutPaths").value || 0,
+    travelMm: +$("#cTravel").value || 0,
+    travelSpeedMms: +$("#cTravelSpeed").value || 1,
+    passes: +$("#cPasses").value || 1,
+    qty: +$("#cQty").value || 1,
+    pricePerSheet: +$("#cSheetPrice").value || 0,
+    hourlyRate: +$("#cHourly").value || 0,
+    setupFee: +$("#cSetup").value || 0,
+    marginPercent: +$("#cMarginPct").value || 0,
   });
+
+  const mmIn = +$("#cMmIn").value || 0;
+  const inMm = +$("#cInMm").value || 0;
+  $("#cUnitOut").textContent = `${mmIn} mm = ${mmToInch(mmIn).toFixed(4)} in · ${inMm} in = ${inchToMm(inMm).toFixed(3)} mm`;
+
+  const preset = LASER_PRESETS.find((x) => x.id === laserSel.value);
+  const host = $("#calcResults");
+  host.innerHTML = `
+    <div class="calc-card"><span>Kerf sonrası</span><b>${summary.afterKerf.widthMm.toFixed(2)} × ${summary.afterKerf.heightMm.toFixed(2)} mm</b></div>
+    <div class="calc-card"><span>İnç</span><b>${summary.inch.width.toFixed(3)} × ${summary.inch.height.toFixed(3)} in</b></div>
+    <div class="calc-card"><span>Parça alanı</span><b>${(summary.partAreaMm2 / 100).toFixed(2)} cm²</b></div>
+    <div class="calc-card"><span>Sac doluluk</span><b>%${summary.utilization.toFixed(1)}</b></div>
+    <div class="calc-card"><span>Saca sığan adet</span><b>${summary.nest.count} (${summary.nest.cols}×${summary.nest.rows}${summary.nest.orientation === "rotated" ? ", döndürülmüş" : ""})</b></div>
+    <div class="calc-card"><span>Delme (pierce)</span><b>${summary.pierces}</b></div>
+    <div class="calc-card"><span>Süre / adet</span><b>${formatDuration(summary.time.totalSec)}</b></div>
+    <div class="calc-card"><span>Süre × qty</span><b>${formatDuration(summary.time.totalSec * (+$("#cQty").value || 1))}</b></div>
+    <div class="calc-card"><span>Malzeme</span><b>${summary.material.sheetsNeeded} sac · ${summary.material.totalMaterial.toFixed(0)} ₺</b></div>
+    <div class="calc-card"><span>Makine</span><b>${summary.machineCost.toFixed(0)} ₺</b></div>
+    <div class="calc-card wide"><span>Teklif (marj %${summary.quote.marginPercent})</span><b>Birim ${summary.quote.sellPerUnit.toFixed(0)} ₺ · Toplam ${summary.quote.sellTotal.toFixed(0)} ₺ · Kâr ${summary.quote.profit.toFixed(0)} ₺</b></div>
+    <div class="calc-card wide"><span>Detay süre</span><b>Kesim ${formatDuration(summary.time.cutSec)} · Kazıma ${formatDuration(summary.time.engraveSec)} · Delme ${formatDuration(summary.time.pierceSec)} · Travel ${formatDuration(summary.time.travelSec)}</b></div>
+    <div class="calc-card wide"><span>Referans lazer</span><b>${preset ? `${preset.label} · güç ~%${preset.power} · ${preset.passes} pass` : "—"} ${scaleNote ? "· " + scaleNote : ""}</b></div>
+  `;
 }
 
-function exportSvg() {
-  const svg = currentSvg();
-  if (!svg) return;
-  downloadText(stampName("kerf_cut", "svg"), svg, "image/svg+xml");
+function pushCalcToCam() {
+  $("#widthMm").value = $("#cPartW").value;
+  $("#kerfMm").value = $("#cKerf").value;
+  $("#kerfDir").value = $("#cKerfDir").value;
+  $("#marginMm").value = $("#cMargin").value;
+  // match sheet preset if possible
+  const w = +$("#cSheetW").value;
+  const h = +$("#cSheetH").value;
+  const match = SHEET_PRESETS.find((s) => s.w === w && s.h === h);
+  if (match) sheetSel.value = match.id;
+  refreshCam();
+  showView("cam");
+  toast("Ölçüm CAM’e aktarıldı");
 }
 
-function exportDxf() {
-  const dxf = currentDxf();
-  if (!dxf) return;
-  downloadText(stampName("kerf_cut", "dxf"), dxf, "application/dxf");
-}
+$("#btnCalcFromJob").addEventListener("click", () => {
+  if (fillCalcFromJob(true)) {
+    runCalc();
+    toast("CAM verileri yüklendi");
+  }
+});
+$("#btnCalcPreset").addEventListener("click", applyLaserPreset);
+$("#btnCalcRun").addEventListener("click", runCalc);
+$("#btnCalcToCam").addEventListener("click", pushCalcToCam);
+laserSel.addEventListener("change", applyLaserPreset);
 
-$("#btnExportSvg").addEventListener("click", exportSvg);
-$("#btnExportDxf").addEventListener("click", exportDxf);
-$("#btnExportBoth").addEventListener("click", () => {
-  exportSvg();
-  setTimeout(exportDxf, 250);
+[
+  "cPartW",
+  "cPartH",
+  "cKerf",
+  "cKerfDir",
+  "cPxW",
+  "cDpi",
+  "cSheetW",
+  "cSheetH",
+  "cMargin",
+  "cGap",
+  "cQty",
+  "cCutLen",
+  "cEngLen",
+  "cCutSpeed",
+  "cEngSpeed",
+  "cCutPaths",
+  "cPierce",
+  "cTravel",
+  "cTravelSpeed",
+  "cPasses",
+  "cSheetPrice",
+  "cHourly",
+  "cSetup",
+  "cMarginPct",
+  "cMmIn",
+  "cInMm",
+].forEach((id) => {
+  const el = $("#" + id);
+  if (!el) return;
+  el.addEventListener("input", runCalc);
+  el.addEventListener("change", runCalc);
 });
 
-/* ---------- Demo template (laser-ready emblem) ---------- */
+/* ---------- Demo ---------- */
 function seedDemo() {
   const c = document.createElement("canvas");
   c.width = 900;
@@ -521,33 +854,27 @@ function seedDemo() {
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, 900, 600);
   ctx.strokeStyle = "#111";
-  ctx.fillStyle = "#111";
-  ctx.lineWidth = 10;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-
-  // outer plate
+  ctx.lineWidth = 10;
   roundRect(ctx, 90, 70, 720, 460, 28);
   ctx.stroke();
-
-  // inner window (hole)
   ctx.lineWidth = 8;
   roundRect(ctx, 160, 140, 280, 200, 12);
   ctx.stroke();
-
-  // mounting holes
-  [[200, 470], [700, 470], [200, 120], [700, 120]].forEach(([x, y]) => {
+  [
+    [200, 470],
+    [700, 470],
+    [200, 120],
+    [700, 120],
+  ].forEach(([x, y]) => {
     ctx.beginPath();
     ctx.arc(x, y, 22, 0, Math.PI * 2);
     ctx.stroke();
   });
-
-  // KERF lettering as thick strokes (centerline fodder)
   ctx.lineWidth = 14;
   ctx.font = "bold 120px sans-serif";
   ctx.strokeText("KERF", 480, 310);
-
-  // gear-ish cutout
   ctx.lineWidth = 7;
   ctx.beginPath();
   ctx.arc(620, 420, 55, 0, Math.PI * 2);
@@ -555,7 +882,6 @@ function seedDemo() {
   ctx.beginPath();
   ctx.arc(620, 420, 22, 0, Math.PI * 2);
   ctx.stroke();
-
   const img = new Image();
   img.onload = () => ingestImage(img);
   img.src = c.toDataURL();
@@ -571,9 +897,14 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+/* boot */
+setupOnboarding();
 applyPreset("sketch");
 syncLabels();
+refreshSubscriptionUI();
 
 if (new URLSearchParams(location.search).has("demo")) {
+  setOnboardingDone();
+  $("#onboarding").hidden = true;
   seedDemo();
 }

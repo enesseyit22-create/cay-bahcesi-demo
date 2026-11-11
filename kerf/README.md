@@ -1,29 +1,18 @@
 # KERF — Laser Cut File Generator · CNC Template Maker
 
-Mobil odaklı **photo → vector art** asistanı. Eskiz / şablon fotoğrafını temiz line-art vektöre çevirir; **LightBurn uyumlu SVG** ve **CAD/CNC DXF** dışa aktarır.
+App Store / Google Play’e hazır **PWA** kabuğu + Capacitor iskeleti. Fotoğraf → line-art vektör → SVG/DXF.
 
 ## Özellikler
-
-- Adaptif (Sauvola) / Otsu eşik, morfolojik temizlik, otomatik kırpma
-- Kapalı **CUT** konturları + delik hiyerarşisi
-- Zhang–Suen iskelet → **ENGRAVE** merkez çizgisi
-- CAM: mm ölçek, kerf ofseti, malzeme hazır ayarı, sac boyutu
-- SVG: `CUT=#FF0000`, `ENGRAVE=#0000FF` (mm)
-- DXF R12: katmanlar `CUT` / `ENGRAVE`, `$INSUNITS=4` (mm), Y-up
+- Yeni açık profesyonel arayüz (Outfit / Sora), alt sekme navigasyonu, onboarding
+- Abonelik: Ücretsiz · Pro · Workshop (sandbox IAP; StoreKit / Play Billing’e hazır)
+- CUT + ENGRAVE, kerf, sac, LightBurn SVG / DXF
+- `privacy.html` · `terms.html` · `store/LISTING.md` · `manifest.webmanifest`
 
 ## Çalıştırma
-
 ```bash
-cd kerf
-python3 -m http.server 8765 --bind 127.0.0.1
+cd kerf && python3 -m http.server 8765 --bind 127.0.0.1
 ```
-
 Demo: http://127.0.0.1:8765/?demo=1
 
-## Akış
-
-1. Fotoğraf çek / yükle / demo  
-2. Hazır ayar: Eskiz · Basılı şablon · Kenar  
-3. Line-art ince ayar → Vektörleştir  
-4. CAM (genişlik, kerf, sac)  
-5. SVG / DXF / ikisi birden  
+## Native sarmalama
+`capacitor.config.json` ile `npx cap add ios|android` sonrası mağaza IAP ürün ID’leri `store/LISTING.md` içinde.

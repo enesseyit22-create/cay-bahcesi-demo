@@ -194,7 +194,7 @@ export function skeletonize(binary, width, height) {
 
   let changed = true;
   let iter = 0;
-  while (changed && iter < 200) {
+  while (changed && iter < 80) {
     changed = false;
     iter++;
     for (const step of [0, 1]) {
@@ -372,9 +372,29 @@ export function vectorize(binary, width, height, opts = {}) {
   }
 
   if (mode === "centerline" || mode === "both") {
-    const skel = skeletonize(binary, width, height);
-    let lines = traceSkeleton(skel, width, height);
+    // Downscale for skeleton speed on mobile
+    const maxSkel = 640;
+    const factor = Math.min(1, maxSkel / Math.max(width, height));
+    let skelBin = binary;
+    let sw = width;
+    let sh = height;
+    if (factor < 0.999) {
+      sw = Math.max(1, Math.round(width * factor));
+      sh = Math.max(1, Math.round(height * factor));
+      skelBin = new Uint8ClampedArray(sw * sh);
+      for (let y = 0; y < sh; y++) {
+        for (let x = 0; x < sw; x++) {
+          const sx = Math.min(width - 1, Math.round(x / factor));
+          const sy = Math.min(height - 1, Math.round(y / factor));
+          skelBin[y * sw + x] = binary[sy * width + sx];
+        }
+      }
+    }
+    const skel = skeletonize(skelBin, sw, sh);
+    let lines = traceSkeleton(skel, sw, sh);
+    const inv = factor < 0.999 ? 1 / factor : 1;
     lines = lines
+      .map((p) => p.map((pt) => ({ x: pt.x * inv, y: pt.y * inv })))
       .map((p) => mergeCollinear(simplifyRDP(p, simplify * 0.85)))
       .filter((p) => p.length >= 4)
       .sort((a, b) => b.length - a.length)

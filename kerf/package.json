@@ -1,0 +1,12 @@
+{
+  "name": "kerf",
+  "version": "1.1.0",
+  "private": true,
+  "description": "KERF — photo to vector laser/CNC assistant (PWA + Capacitor-ready)",
+  "scripts": {
+    "start": "python3 -m http.server 8765 --bind 127.0.0.1",
+    "cap:sync": "npx cap sync",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android"
+  }
+}

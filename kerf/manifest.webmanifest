@@ -1,0 +1,27 @@
+{
+  "name": "KERF — Laser Cut & CNC Vector",
+  "short_name": "KERF",
+  "description": "Photo to vector art. Laser cut file generator and CNC template maker with SVG/DXF export.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#eef3f8",
+  "theme_color": "#0d7a78",
+  "categories": ["productivity", "graphics", "utilities"],
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
