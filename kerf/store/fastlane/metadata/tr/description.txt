@@ -1,0 +1,11 @@
+KERF, telefon kamerasıyla çekilen eskizleri lazer ve CNC için temiz vektörlere çevirir.
+
+• Fotoğraf çek veya yükle
+• Adaptif line-art temizliği
+• CUT + ENGRAVE katmanları
+• mm ölçek, kerf, sac yerleşimi
+• Atölye hesapları (süre ve maliyet)
+• SVG (LightBurn) ve DXF dışa aktarım
+• 11 dil
+
+Abonelik ile sınırsız DXF ve filigransız çıktı.

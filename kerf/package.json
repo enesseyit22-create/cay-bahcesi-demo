@@ -1,0 +1,32 @@
+{
+  "name": "kerf",
+  "version": "1.2.0",
+  "private": true,
+  "description": "KERF — photo to vector laser/CNC assistant (PWA + Capacitor)",
+  "scripts": {
+    "start": "python3 -m http.server 8765 --bind 127.0.0.1",
+    "build:web": "node scripts/prepare-www.mjs",
+    "icons": "node scripts/generate-icons.mjs",
+    "screenshots": "node scripts/generate-screenshots.mjs",
+    "cap:sync": "npm run build:web && npx cap sync",
+    "cap:android": "npm run cap:sync && npx cap open android",
+    "cap:ios": "npm run cap:sync && npx cap open ios",
+    "cap:add:android": "npx cap add android",
+    "cap:add:ios": "npx cap add ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/app": "^7.1.0",
+    "@capacitor/core": "^7.4.3",
+    "@capacitor/haptics": "^7.0.2",
+    "@capacitor/keyboard": "^7.0.3",
+    "@capacitor/preferences": "^7.0.2",
+    "@capacitor/splash-screen": "^7.0.3",
+    "@capacitor/status-bar": "^7.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.3",
+    "puppeteer-core": "^23.11.1",
+    "typescript": "^7.0.2"
+  }
+}

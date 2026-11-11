@@ -1,0 +1,17 @@
+node_modules/
+www/
+.DS_Store
+*.log
+android/.gradle/
+android/app/build/
+android/build/
+ios/App/Pods/
+ios/DerivedData/
+.idea/
+*.iml
+local.properties
+keystore.properties
+*.keystore
+*.jks
+.env
+.env.*

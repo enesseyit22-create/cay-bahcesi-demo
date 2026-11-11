@@ -1,0 +1,1 @@
+lazer kesim,CNC,vektör,SVG,DXF,LightBurn,kerf,fotoğraf

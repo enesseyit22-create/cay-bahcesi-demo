@@ -1,0 +1,14 @@
+KERF turns phone photos of sketches into clean cut-ready vectors for laser cutters and CNC.
+
+• Photo → line art → CUT / ENGRAVE layers
+• Export SVG & DXF (mm) with LightBurn-friendly colors
+• Kerf, sheet size, and workshop cost calculator
+• On-device processing — your photos stay on your phone
+• 11 languages including Turkish, English, German, Arabic (RTL)
+
+Plans
+• Free — try the studio
+• Pro — unlimited exports & presets
+• Workshop — shop calculator, quote tools, priority OTA
+
+Privacy: no account required for core processing. See in-app Privacy Policy.

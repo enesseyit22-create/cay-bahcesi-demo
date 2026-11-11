@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#e8eef4">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="KERF">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="Laser cut file generator & CNC template maker. Photo to vector art — SVG/DXF, kerf, subscriptions.">
+  <meta name="keywords" content="laser cut file generator, CNC template maker, photo to vector art, DXF, SVG, LightBurn">
+  <!-- Native IAP: set content to RevenueCat public SDK key (appl_… / goog_…) when shipping -->
+  <meta name="kerf-rc-key" content="">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>KERF — Laser Cut · CNC Vector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-bg" aria-hidden="true"></div>
+
+  <div id="onboarding" class="onboarding" hidden>
+    <div class="onb-slides">
+      <article class="onb-slide is-active" data-onb="0">
+        <div class="onb-visual v1"></div>
+        <h1 data-i18n="onb.1.title">From photo to cut</h1>
+        <p data-i18n="onb.1.body">Capture a sketch with your phone camera and turn it into clean line-art vectors.</p>
+      </article>
+      <article class="onb-slide" data-onb="1">
+        <div class="onb-visual v2"></div>
+        <h1 data-i18n="onb.2.title">CUT + ENGRAVE</h1>
+        <p data-i18n="onb.2.body">Closed cut paths and centerline engraving.</p>
+      </article>
+      <article class="onb-slide" data-onb="2">
+        <div class="onb-visual v3"></div>
+        <h1 data-i18n="onb.3.title">Unlimited with Pro</h1>
+        <p data-i18n="onb.3.body">DXF, kerf, sheet nesting and watermark-free output.</p>
+      </article>
+    </div>
+    <div class="onb-dots" id="onbDots"></div>
+    <div class="onb-actions">
+      <button type="button" class="btn btn-ghost" id="onbSkip" data-i18n="onb.skip">Skip</button>
+      <button type="button" class="btn btn-primary" id="onbNext" data-i18n="onb.next">Continue</button>
+    </div>
+  </div>
+
+  <div id="otaBanner" class="ota-banner" hidden>
+    <div class="ota-banner-copy">
+      <strong id="otaBannerTitle">Update available</strong>
+      <p id="otaBannerNotes"></p>
+    </div>
+    <div class="ota-banner-actions">
+      <button type="button" class="btn btn-ghost" id="otaLater" data-i18n="ota.banner.later">Later</button>
+      <button type="button" class="btn btn-primary" id="otaUpdate" data-i18n="ota.banner.update">Update now</button>
+    </div>
+  </div>
+
+  <div id="app" class="app">
+    <header class="topbar">
+      <a class="brand" href="#home" data-nav="home">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>
+          <strong class="brand-name">KERF</strong>
+          <small id="planBadge" data-i18n="brand.free">Free</small>
+        </span>
+      </a>
+      <div class="topbar-actions">
+        <select id="langSelect" class="lang-select" aria-label="Language"></select>
+        <button type="button" class="icon-btn" id="btnOpenPaywall" data-i18n="brand.pro" data-i18n-aria="nav.subscription">Pro</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section id="view-home" class="view is-active" data-view="home">
+        <div class="home-hero">
+          <p class="eyebrow" data-i18n="home.eyebrow">Laser cut file generator</p>
+          <h1>KERF</h1>
+          <p class="lede" data-i18n="home.lede">CNC template maker · photo to vector art.</p>
+          <div class="cta-row">
+            <button type="button" class="btn btn-primary" id="ctaCamera" data-i18n="home.camera">Camera</button>
+            <label class="btn btn-secondary" for="fileInput" data-i18n="home.gallery">Gallery</label>
+            <button type="button" class="btn btn-ghost" id="ctaDemo" data-i18n="home.demo">Demo</button>
+            <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
+          </div>
+        </div>
+        <div class="metric-row">
+          <div class="metric"><b id="metricExports">0</b><span data-i18n="home.metric.exports">exports today</span></div>
+          <div class="metric"><b id="metricRemain">3</b><span data-i18n="home.metric.remain">remaining</span></div>
+          <div class="metric"><b id="metricPlan">Free</b><span data-i18n="home.metric.plan">plan</span></div>
+        </div>
+        <section class="feature-list">
+          <article>
+            <h3 data-i18n="home.f1.title">1 · Capture</h3>
+            <p data-i18n="home.f1.body">Presets for sketch photos, printed templates, or edge detection.</p>
+          </article>
+          <article>
+            <h3 data-i18n="home.f2.title">2 · Vectorize</h3>
+            <p data-i18n="home.f2.body">Adaptive threshold, hole hierarchy, centerline engraving.</p>
+          </article>
+          <article>
+            <h3 data-i18n="home.f3.title">3 · Calculate &amp; cut</h3>
+            <p data-i18n="home.f3.body">Kerf, time, cost, sheet nesting — then SVG/DXF.</p>
+          </article>
+        </section>
+        <div class="row-actions">
+          <button type="button" class="btn btn-secondary" data-nav="calc" data-i18n="home.openCalc">Open calculator</button>
+        </div>
+      </section>
+
+      <section id="view-studio" class="view" data-view="studio" hidden>
+        <div class="page-head">
+          <h2 data-i18n="studio.title">Studio</h2>
+          <span class="pill" id="studioStatus" data-i18n="studio.ready">Ready</span>
+        </div>
+        <div class="preset-row" role="group">
+          <button type="button" class="chip is-active" data-preset="sketch" data-i18n="preset.sketch">Sketch</button>
+          <button type="button" class="chip" data-preset="print" data-i18n="preset.print">Template</button>
+          <button type="button" class="chip" data-preset="edge" data-i18n="preset.edge">Edges</button>
+        </div>
+        <div class="stage-tabs">
+          <button type="button" class="tab is-active" data-stage="source" data-i18n="stage.source">Source</button>
+          <button type="button" class="tab" data-stage="process" data-i18n="stage.process">Line-art</button>
+          <button type="button" class="tab" data-stage="vector" data-i18n="stage.vector">Vector</button>
+        </div>
+        <div class="stage-panel is-active" data-panel="source">
+          <div class="preview-frame">
+            <canvas id="sourceCanvas"></canvas>
+            <p class="preview-empty" id="sourceEmpty" data-i18n="source.empty">Load a drawing</p>
+          </div>
+          <div class="row-actions">
+            <button type="button" class="btn btn-primary" id="btnOpenCamera" data-i18n="btn.camera">Camera</button>
+            <label class="btn btn-secondary" for="fileInputStudio" data-i18n="btn.upload">Upload</label>
+            <input type="file" id="fileInputStudio" accept="image/*" capture="environment" hidden>
+            <button type="button" class="btn btn-ghost" id="btnToProcess" disabled data-i18n="btn.next">Next</button>
+          </div>
+        </div>
+        <div class="stage-panel" data-panel="process" hidden>
+          <div class="preview-frame"><canvas id="processCanvas"></canvas></div>
+          <div class="controls">
+            <label class="ctrl"><span><span data-i18n="ctrl.blur">Blur</span> <b id="blurVal">1</b></span><input type="range" id="blur" min="0" max="4" step="1" value="1"></label>
+            <label class="ctrl"><span><span data-i18n="ctrl.threshold">Threshold (0=auto)</span> <b id="thrVal">0</b></span><input type="range" id="thr" min="0" max="220" value="0"></label>
+            <label class="ctrl"><span><span data-i18n="ctrl.clean">Cleanup</span> <b id="cleanVal">1</b></span><input type="range" id="clean" min="0" max="3" step="1" value="1"></label>
+            <div class="ctrl-grid">
+              <label class="ctrl check"><input type="checkbox" id="adaptive" checked><span data-i18n="ctrl.adaptive">Adaptive</span></label>
+              <label class="ctrl check"><input type="checkbox" id="autoCrop" checked><span data-i18n="ctrl.crop">Crop</span></label>
+              <label class="ctrl check"><input type="checkbox" id="invertAuto" checked><span data-i18n="ctrl.invert">Auto invert</span></label>
+            </div>
+            <p class="hint" id="processHint" data-i18n="hint.sketch">Sketch · Sauvola adaptive</p>
+          </div>
+          <div class="row-actions"><button type="button" class="btn btn-primary" id="btnVectorize" data-i18n="btn.vectorize">Vectorize</button></div>
+        </div>
+        <div class="stage-panel" data-panel="vector" hidden>
+          <div class="preview-frame preview-vector">
+            <div id="svgPreview" class="svg-host"></div>
+            <canvas id="cutPreview" class="cut-overlay" aria-hidden="true"></canvas>
+            <div class="legend"><span class="leg cut">CUT</span><span class="leg eng">ENGRAVE</span></div>
+          </div>
+          <div class="controls">
+            <label class="ctrl"><span data-i18n="ctrl.mode">Mode</span>
+              <select id="vecMode">
+                <option value="cut" selected data-i18n="mode.cut">Cut only</option>
+                <option value="centerline" data-i18n="mode.centerline">Engrave only</option>
+                <option value="both" data-i18n="mode.both">Cut + engrave</option>
+              </select>
+            </label>
+            <label class="ctrl"><span><span data-i18n="ctrl.simplify">Simplify</span> <b id="simpVal">1.2</b></span><input type="range" id="simp" min="0.3" max="4" step="0.1" value="1.2"></label>
+            <label class="ctrl"><span><span data-i18n="ctrl.minArea">Min. area</span> <b id="minAreaVal">80</b></span><input type="range" id="minArea" min="20" max="400" step="10" value="80"></label>
+            <label class="ctrl check"><input type="checkbox" id="showCut" checked><span data-i18n="ctrl.scanPreview">Scan preview</span></label>
+          </div>
+          <div class="stats" id="vecStats"></div>
+          <div class="row-actions">
+            <button type="button" class="btn btn-secondary" data-nav="cam" data-i18n="btn.cam">CAM</button>
+            <button type="button" class="btn btn-primary" data-nav="export" data-i18n="btn.export">Export</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-cam" class="view" data-view="cam" hidden>
+        <div class="page-head"><h2 data-i18n="cam.title">CAM</h2><span class="pill">mm · kerf</span></div>
+        <div class="cam-grid">
+          <label class="field"><span data-i18n="cam.width">Width (mm)</span><input type="number" id="widthMm" value="100" min="1" step="0.1"></label>
+          <label class="field"><span data-i18n="cam.kerf">Kerf (mm)</span><input type="number" id="kerfMm" value="0.15" min="0" step="0.01"></label>
+          <label class="field"><span data-i18n="cam.offset">Offset</span>
+            <select id="kerfDir">
+              <option value="out" data-i18n="cam.offset.out">Outward</option>
+              <option value="in" data-i18n="cam.offset.in">Inward</option>
+              <option value="none" data-i18n="cam.offset.none">None</option>
+            </select>
+          </label>
+          <label class="field"><span data-i18n="cam.material">Material</span><select id="material"></select></label>
+          <label class="field"><span data-i18n="cam.sheet">Sheet</span><select id="sheet"></select></label>
+          <label class="field"><span data-i18n="cam.margin">Margin (mm)</span><input type="number" id="marginMm" value="5" min="0" step="0.5"></label>
+        </div>
+        <div class="cam-meta" id="camMeta"><p data-i18n="cam.waitVector">Create a vector in Studio first.</p></div>
+        <div class="preview-frame preview-vector cam-preview">
+          <div id="camSvgPreview" class="svg-host"></div>
+          <div class="legend"><span class="leg cut">CUT</span><span class="leg eng">ENGRAVE</span></div>
+        </div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-secondary" data-nav="calc" data-i18n="cam.openCalc">Measure</button>
+          <button type="button" class="btn btn-primary" data-nav="export" data-i18n="btn.export">Export</button>
+        </div>
+      </section>
+
+      <section id="view-calc" class="view" data-view="calc" hidden>
+        <div class="page-head">
+          <h2 data-i18n="calc.title">Measure</h2>
+          <span class="pill" data-i18n="calc.badge">all calculations</span>
+        </div>
+        <p class="lede calc-intro" data-i18n="calc.intro">Kerf, time, cost, nesting, scale and unit conversion.</p>
+        <div class="row-actions" style="margin-top:0;margin-bottom:12px">
+          <button type="button" class="btn btn-secondary" id="btnCalcFromJob" data-i18n="calc.fromJob">Fill from CAM</button>
+          <button type="button" class="btn btn-ghost" id="btnCalcPreset" data-i18n="calc.preset">Material preset</button>
+        </div>
+        <div class="calc-sections">
+          <details class="calc-block" open>
+            <summary data-i18n="calc.sec.scale">Scale &amp; kerf</summary>
+            <div class="cam-grid">
+              <label class="field"><span data-i18n="calc.partW">Part width (mm)</span><input type="number" id="cPartW" value="100" step="0.1"></label>
+              <label class="field"><span data-i18n="calc.partH">Part height (mm)</span><input type="number" id="cPartH" value="64" step="0.1"></label>
+              <label class="field"><span data-i18n="calc.kerf">Kerf (mm)</span><input type="number" id="cKerf" value="0.15" step="0.01"></label>
+              <label class="field"><span data-i18n="calc.kerfDir">Kerf direction</span>
+                <select id="cKerfDir">
+                  <option value="out" data-i18n="cam.offset.out">Outward</option>
+                  <option value="in" data-i18n="cam.offset.in">Inward</option>
+                  <option value="none" data-i18n="cam.offset.none">None</option>
+                </select>
+              </label>
+              <label class="field"><span data-i18n="calc.pxW">Pixel width</span><input type="number" id="cPxW" value="0" step="1"></label>
+              <label class="field"><span data-i18n="calc.dpi">DPI (opt.)</span><input type="number" id="cDpi" value="300" step="1"></label>
+            </div>
+          </details>
+          <details class="calc-block" open>
+            <summary data-i18n="calc.sec.sheet">Sheet &amp; nesting</summary>
+            <div class="cam-grid">
+              <label class="field"><span data-i18n="calc.sheetW">Sheet W (mm)</span><input type="number" id="cSheetW" value="300" step="1"></label>
+              <label class="field"><span data-i18n="calc.sheetH">Sheet H (mm)</span><input type="number" id="cSheetH" value="200" step="1"></label>
+              <label class="field"><span data-i18n="calc.margin">Edge margin</span><input type="number" id="cMargin" value="5" step="0.5"></label>
+              <label class="field"><span data-i18n="calc.gap">Part gap</span><input type="number" id="cGap" value="2" step="0.5"></label>
+              <label class="field"><span data-i18n="calc.qty">Quantity</span><input type="number" id="cQty" value="1" min="1" step="1"></label>
+            </div>
+          </details>
+          <details class="calc-block" open>
+            <summary data-i18n="calc.sec.time">Cut time</summary>
+            <div class="cam-grid">
+              <label class="field"><span data-i18n="calc.cutLen">CUT length (mm)</span><input type="number" id="cCutLen" value="0" step="1"></label>
+              <label class="field"><span data-i18n="calc.engLen">ENGRAVE length</span><input type="number" id="cEngLen" value="0" step="1"></label>
+              <label class="field"><span data-i18n="calc.cutSpeed">CUT speed (mm/s)</span><input type="number" id="cCutSpeed" value="12" step="0.1"></label>
+              <label class="field"><span data-i18n="calc.engSpeed">ENGRAVE speed</span><input type="number" id="cEngSpeed" value="80" step="1"></label>
+              <label class="field"><span data-i18n="calc.cutPaths">CUT path count</span><input type="number" id="cCutPaths" value="0" step="1"></label>
+              <label class="field"><span data-i18n="calc.pierce">Pierce time (s)</span><input type="number" id="cPierce" value="0.4" step="0.05"></label>
+              <label class="field"><span data-i18n="calc.travel">Travel (mm)</span><input type="number" id="cTravel" value="0" step="1"></label>
+              <label class="field"><span data-i18n="calc.travelSpeed">Travel speed</span><input type="number" id="cTravelSpeed" value="200" step="1"></label>
+              <label class="field"><span data-i18n="calc.passes">Passes</span><input type="number" id="cPasses" value="1" min="1" step="1"></label>
+              <label class="field"><span data-i18n="calc.laserPreset">Laser preset</span><select id="cLaserPreset"></select></label>
+            </div>
+          </details>
+          <details class="calc-block" open>
+            <summary data-i18n="calc.sec.cost">Cost &amp; quote</summary>
+            <div class="cam-grid">
+              <label class="field"><span data-i18n="calc.sheetPrice">Sheet price</span><input type="number" id="cSheetPrice" value="80" step="1"></label>
+              <label class="field"><span data-i18n="calc.hourly">Machine / hour</span><input type="number" id="cHourly" value="250" step="1"></label>
+              <label class="field"><span data-i18n="calc.setup">Setup fee</span><input type="number" id="cSetup" value="40" step="1"></label>
+              <label class="field"><span data-i18n="calc.marginPct">Margin %</span><input type="number" id="cMarginPct" value="30" step="1"></label>
+            </div>
+          </details>
+          <details class="calc-block">
+            <summary data-i18n="calc.sec.units">Unit conversion</summary>
+            <div class="cam-grid">
+              <label class="field"><span data-i18n="calc.mmIn">mm → inch</span><input type="number" id="cMmIn" value="25.4" step="0.01"></label>
+              <label class="field"><span data-i18n="calc.inMm">inch → mm</span><input type="number" id="cInMm" value="1" step="0.01"></label>
+            </div>
+            <div class="calc-mini" id="cUnitOut">—</div>
+          </details>
+        </div>
+        <div class="calc-results" id="calcResults"></div>
+        <div class="row-actions">
+          <button type="button" class="btn btn-primary" id="btnCalcRun" data-i18n="calc.run">Calculate</button>
+          <button type="button" class="btn btn-secondary" id="btnCalcToCam" data-i18n="calc.toCam">Send to CAM</button>
+        </div>
+      </section>
+
+      <section id="view-export" class="view" data-view="export" hidden>
+        <div class="page-head"><h2 data-i18n="export.title">Export</h2><span class="pill" id="exportPlanPill">Free</span></div>
+        <div class="export-cards">
+          <article class="export-card">
+            <h3 data-i18n="export.svg.title">SVG</h3>
+            <p data-i18n="export.svg.body">LightBurn / Glowforge · red CUT, blue ENGRAVE.</p>
+            <button type="button" class="btn btn-primary" id="btnExportSvg" data-i18n="export.svg.btn">Download SVG</button>
+          </article>
+          <article class="export-card pro-lock" id="cardDxf">
+            <h3><span data-i18n="export.dxf.title">DXF</span> <span class="tag-pro">Pro</span></h3>
+            <p data-i18n="export.dxf.body">CAD/CNC · CUT/ENGRAVE layers · mm.</p>
+            <button type="button" class="btn btn-primary" id="btnExportDxf" data-i18n="export.dxf.btn">Download DXF</button>
+          </article>
+          <article class="export-card pro-lock" id="cardBoth">
+            <h3><span data-i18n="export.both.title">Bundle</span> <span class="tag-pro">Pro</span></h3>
+            <p data-i18n="export.both.body">SVG + DXF together.</p>
+            <button type="button" class="btn btn-secondary" id="btnExportBoth" data-i18n="export.both.btn">Download both</button>
+          </article>
+        </div>
+        <div class="cam-meta" id="exportMeta"><p>—</p></div>
+        <div class="checklist"><h3 data-i18n="export.check">Checklist</h3><ul id="exportChecks"></ul></div>
+        <p class="legal-mini"><span data-i18n="export.legal">Exports follow your subscription.</span> <a href="privacy.html" data-i18n="export.privacy">Privacy</a> · <a href="terms.html" data-i18n="export.terms">Terms</a></p>
+      </section>
+
+      <section id="view-account" class="view" data-view="account" hidden>
+        <div class="page-head"><h2 data-i18n="account.title">Profile</h2></div>
+        <div class="account-card" id="accountCard">
+          <p class="eyebrow" data-i18n="account.sub">Subscription</p>
+          <h3 id="accountPlanName">Free</h3>
+          <p id="accountPlanMeta" class="muted">Sandbox</p>
+          <label class="field" style="margin-top:12px">
+            <span data-i18n="account.language">Language</span>
+            <select id="langSelectAccount"></select>
+          </label>
+          <button type="button" class="btn btn-primary" id="btnUpgrade" data-i18n="account.upgrade">View plans</button>
+          <button type="button" class="btn btn-ghost" id="btnRestore" data-i18n="account.restore">Restore purchases</button>
+        </div>
+        <div class="account-card ota-card">
+          <p class="eyebrow" data-i18n="ota.section">Updates (OTA)</p>
+          <p id="otaCurrent" class="muted">Installed</p>
+          <p id="otaStatus" class="hint"></p>
+          <label class="field">
+            <span data-i18n="ota.manifestUrl">OTA manifest URL</span>
+            <input type="url" id="otaManifestInput" placeholder="https://cdn.example.com/kerf/ota-manifest.json">
+          </label>
+          <p class="hint" data-i18n="ota.manifestHint">Host ota-manifest.json on any HTTPS CDN for external updates.</p>
+          <div class="row-actions">
+            <button type="button" class="btn btn-secondary" id="otaSaveUrl" data-i18n="ota.manifestSave">Save URL</button>
+            <button type="button" class="btn btn-primary" id="otaCheckBtn" data-i18n="ota.check">Check for updates</button>
+          </div>
+        </div>
+        <ul class="settings-list">
+          <li><a href="privacy.html" data-i18n="account.privacy">Privacy Policy</a></li>
+          <li><a href="terms.html" data-i18n="account.terms">Terms of Use</a></li>
+          <li><a href="store/LISTING.md" data-i18n="account.listing">Store listing text</a></li>
+          <li><button type="button" id="btnResetOnb" data-i18n="account.resetOnb">Show welcome again</button></li>
+          <li><button type="button" id="btnSandboxFree" data-i18n="account.sandboxFree">Sandbox: back to Free</button></li>
+        </ul>
+        <p class="legal-mini" data-i18n="account.footer">KERF v1.1 · PWA + Capacitor-ready for iOS / Android</p>
+      </section>
+    </main>
+
+    <nav class="tabbar" aria-label="Tabs">
+      <button type="button" class="tabbar-item is-active" data-nav="home"><span class="ti" aria-hidden="true"></span><span data-i18n="nav.home">Home</span></button>
+      <button type="button" class="tabbar-item" data-nav="studio"><span class="ti" aria-hidden="true"></span><span data-i18n="nav.studio">Studio</span></button>
+      <button type="button" class="tabbar-item" data-nav="cam"><span class="ti" aria-hidden="true"></span><span data-i18n="nav.cam">CAM</span></button>
+      <button type="button" class="tabbar-item" data-nav="calc"><span class="ti" aria-hidden="true"></span><span data-i18n="nav.calc">Measure</span></button>
+      <button type="button" class="tabbar-item" data-nav="account"><span class="ti" aria-hidden="true"></span><span data-i18n="nav.account">Profile</span></button>
+    </nav>
+  </div>
+
+  <dialog id="paywall" class="paywall">
+    <div class="paywall-inner">
+      <header>
+        <h2 data-i18n="paywall.title">KERF Pro</h2>
+        <button type="button" class="icon-btn" id="paywallClose" data-i18n-aria="paywall.close">✕</button>
+      </header>
+      <div class="billing-toggle" role="group">
+        <button type="button" class="chip" data-billing="monthly" data-i18n="paywall.monthly">Monthly</button>
+        <button type="button" class="chip is-active" data-billing="yearly" data-i18n="paywall.yearly">Yearly · save 33%</button>
+      </div>
+      <div id="planCards" class="plan-cards"></div>
+      <p class="paywall-note" data-i18n="paywall.note">Sandbox purchase. Live store billing plugs in later.</p>
+      <button type="button" class="btn btn-ghost btn-block" id="paywallRestore" data-i18n="paywall.restore">Restore</button>
+    </div>
+  </dialog>
+
+  <dialog id="camDialog" class="cam-dialog">
+    <div class="cam-dialog-inner">
+      <video id="liveVideo" playsinline autoplay muted></video>
+      <canvas id="snapCanvas" hidden></canvas>
+      <div class="cam-dialog-bar">
+        <button type="button" class="btn btn-ghost" id="btnCloseCam" data-i18n="cam.dialog.close">Close</button>
+        <button type="button" class="btn btn-primary" id="btnSnap" data-i18n="cam.dialog.snap">Capture</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

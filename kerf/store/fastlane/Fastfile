@@ -1,0 +1,24 @@
+# Stub lanes — run on a machine with Xcode / Play credentials.
+default_platform(:ios)
+
+platform :ios do
+  desc "Build iOS (after cap add ios on macOS)"
+  lane :build do
+    # gym(scheme: "App", export_method: "app-store")
+    UI.message("Open kerf/ios in Xcode after: npm run cap:add:ios")
+  end
+
+  desc "Upload metadata only"
+  lane :meta do
+    # deliver(skip_binary_upload: true, force: true)
+    UI.message("Metadata lives in store/fastlane/metadata/")
+  end
+end
+
+platform :android do
+  desc "Build Play AAB"
+  lane :build do
+    # gradle(task: "bundle", build_type: "Release", project_dir: "android")
+    UI.message("From kerf/: npm run cap:sync && open android/ in Android Studio")
+  end
+end

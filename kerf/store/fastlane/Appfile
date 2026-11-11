@@ -1,0 +1,6 @@
+# Fill locally — do not commit secrets
+# apple_id("you@example.com")
+# app_identifier("app.kerf.vector")
+# team_id("XXXXXXXXXX")
+# json_key_file("play-service-account.json")
+# package_name("app.kerf.vector")

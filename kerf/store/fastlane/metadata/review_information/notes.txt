@@ -1,0 +1,3 @@
+KERF processes images on-device. Demo: open with ?demo=1 or tap Demo on home.
+IAP sandbox products: kerf_pro_monthly, kerf_pro_yearly, kerf_workshop_monthly, kerf_workshop_yearly.
+No login required for core vectorization.
