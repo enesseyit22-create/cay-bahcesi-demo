@@ -228,9 +228,9 @@ function runVectorize() {
   });
   svgPreview.innerHTML = svg.replace(/^<\?xml[^>]*>/, "");
   studioStatus.textContent = `${result.contourCount} kontur`;
-  drawCutOverlay();
   showStage("vector");
   buildCamState();
+  requestAnimationFrame(() => drawCutOverlay());
 }
 
 $("#btnVectorize").addEventListener("click", runVectorize);
@@ -249,20 +249,25 @@ function drawCutOverlay() {
     return;
   }
   const rect = host.getBoundingClientRect();
-  cutPreview.width = rect.width * devicePixelRatio;
-  cutPreview.height = rect.height * devicePixelRatio;
+  const w = Math.max(1, Math.floor(rect.width * devicePixelRatio));
+  const h = Math.max(1, Math.floor(rect.height * devicePixelRatio));
+  if (!Number.isFinite(w) || !Number.isFinite(h) || rect.width < 1 || rect.height < 1) {
+    requestAnimationFrame(drawCutOverlay);
+    return;
+  }
+  cutPreview.width = w;
+  cutPreview.height = h;
   cutPreview.style.width = rect.width + "px";
   cutPreview.style.height = rect.height + "px";
   const ctx = cutPreview.getContext("2d");
-  ctx.clearRect(0, 0, cutPreview.width, cutPreview.height);
-  // soft amber scan line
-  const y = ((performance.now() / 18) % cutPreview.height);
+  ctx.clearRect(0, 0, w, h);
+  const y = (performance.now() / 18) % h;
   const g = ctx.createLinearGradient(0, y - 20, 0, y + 20);
   g.addColorStop(0, "rgba(232,163,23,0)");
   g.addColorStop(0.5, "rgba(232,163,23,0.35)");
   g.addColorStop(1, "rgba(232,163,23,0)");
   ctx.fillStyle = g;
-  ctx.fillRect(0, y - 20, cutPreview.width, 40);
+  ctx.fillRect(0, y - 20, w, 40);
   if ($("#showCut").checked) requestAnimationFrame(drawCutOverlay);
 }
 
