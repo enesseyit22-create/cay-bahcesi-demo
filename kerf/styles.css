@@ -147,6 +147,26 @@ body {
   letter-spacing: 0.04em;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lang-select,
+#langSelectAccount {
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0 10px;
+  max-width: 118px;
+}
+
 .icon-btn {
   appearance: none;
   border: 1px solid var(--line);
@@ -160,6 +180,34 @@ body {
   border-radius: 999px;
   cursor: pointer;
   box-shadow: var(--shadow);
+}
+
+html[dir="rtl"] .brand,
+html[dir="rtl"] .page-head,
+html[dir="rtl"] .topbar,
+html[dir="rtl"] .cam-dialog-bar,
+html[dir="rtl"] .onb-actions {
+  flex-direction: row-reverse;
+}
+
+html[dir="rtl"] .feature-list article,
+html[dir="rtl"] .export-card,
+html[dir="rtl"] .account-card,
+html[dir="rtl"] .calc-block,
+html[dir="rtl"] .controls,
+html[dir="rtl"] .field,
+html[dir="rtl"] .ctrl {
+  text-align: right;
+}
+
+html[dir="rtl"] .settings-list a,
+html[dir="rtl"] .settings-list button {
+  text-align: right;
+}
+
+html[dir="rtl"] .legend {
+  left: auto;
+  right: 10px;
 }
 
 .main {

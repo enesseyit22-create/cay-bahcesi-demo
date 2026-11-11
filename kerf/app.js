@@ -30,12 +30,62 @@ import {
 import {
   LASER_PRESETS,
   summarizeJobCalc,
-  formatDuration,
   mmToInch,
   inchToMm,
   pxAtDpiToMm,
   scaleFromWidth,
 } from "./lib/calc.js";
+import {
+  initI18n,
+  applyI18n,
+  t,
+  setLang,
+  getLang,
+  LANGS,
+} from "./lib/i18n.js";
+
+function formatDurationI18n(sec) {
+  if (!Number.isFinite(sec) || sec < 0) return "—";
+  if (sec < 60) return t("dur.sec", { n: sec.toFixed(1) });
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  if (m < 60) return t("dur.min", { m, s });
+  const h = Math.floor(m / 60);
+  return t("dur.hr", { h, m: m % 60 });
+}
+
+function fillLangSelects() {
+  for (const sel of [$("#langSelect"), $("#langSelectAccount")]) {
+    if (!sel) continue;
+    sel.innerHTML = "";
+    for (const l of LANGS) {
+      const o = document.createElement("option");
+      o.value = l.code;
+      o.textContent = l.label;
+      if (l.code === getLang()) o.selected = true;
+      sel.appendChild(o);
+    }
+  }
+}
+
+function refreshLanguage(code) {
+  if (code) setLang(code);
+  applyI18n();
+  fillLangSelects();
+  // re-translate option labels inside selects that use data-i18n
+  document.querySelectorAll("option[data-i18n]").forEach((el) => {
+    el.textContent = t(el.getAttribute("data-i18n"));
+  });
+  refreshSubscriptionUI();
+  if (!$("#view-calc").hidden) runCalc();
+  if (!$("#view-cam").hidden) refreshCam();
+  if (!$("#view-export").hidden) refreshExport();
+  // onboarding next label
+  const onbNext = $("#onbNext");
+  if (onbNext && typeof onbIndex !== "undefined") {
+    onbNext.textContent = onbIndex >= 2 ? t("onb.start") : t("onb.next");
+  }
+}
 
 const state = {
   sourceReady: false,
@@ -86,12 +136,13 @@ function refreshSubscriptionUI() {
     ? Math.max(0, limits.exportsPerDay - usage.exports)
     : "∞";
 
-  $("#planBadge").textContent = plan.name;
+  const planName = t(`plan.${plan.id}.name`);
+  $("#planBadge").textContent = planName;
   $("#metricExports").textContent = String(usage.exports);
   $("#metricRemain").textContent = String(remain);
-  $("#metricPlan").textContent = plan.id === "free" ? "Free" : plan.name;
-  $("#exportPlanPill").textContent = plan.name;
-  $("#accountPlanName").textContent = plan.name;
+  $("#metricPlan").textContent = plan.id === "free" ? t("brand.free") : planName;
+  $("#exportPlanPill").textContent = planName;
+  $("#accountPlanName").textContent = planName;
   $("#accountPlanMeta").textContent = `${sub.source === "sandbox" ? "Sandbox" : "Store"} · ${
     sub.billing || "—"
   } · ${sub.productId || "kerf_free"}`;
@@ -110,10 +161,15 @@ function renderPlanCards() {
   for (const plan of PLANS) {
     const price =
       plan.id === "free"
-        ? "Ücretsiz"
+        ? t("plan.freePrice")
         : state.billing === "yearly"
-          ? `${formatPrice(plan.priceYearly)} / yıl`
-          : `${formatPrice(plan.priceMonthly)} / ay`;
+          ? `${formatPrice(plan.priceYearly)} ${t("plan.perYear")}`
+          : `${formatPrice(plan.priceMonthly)} ${t("plan.perMonth")}`;
+    const name = t(`plan.${plan.id}.name`);
+    const badge = plan.badge ? t(`plan.${plan.id}.badge`) : "";
+    const feats = ["f1", "f2", "f3", "f4", "f5"]
+      .map((f) => t(`plan.${plan.id}.${f}`))
+      .filter((s) => s && !s.startsWith("plan."));
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `plan-card${plan.id === "pro" ? " is-featured" : ""}${
@@ -121,22 +177,22 @@ function renderPlanCards() {
     }`;
     btn.innerHTML = `
       <div class="row">
-        <h3>${plan.name}</h3>
-        ${plan.badge ? `<span class="plan-badge">${plan.badge}</span>` : `<span></span>`}
+        <h3>${name}</h3>
+        ${badge ? `<span class="plan-badge">${badge}</span>` : `<span></span>`}
       </div>
       <div class="price">${price}</div>
-      <p class="muted" style="margin:6px 0 0">${plan.blurb}</p>
-      <ul>${plan.features.map((f) => `<li>${f}</li>`).join("")}</ul>
+      <p class="muted" style="margin:6px 0 0">${t(`plan.${plan.id}.blurb`)}</p>
+      <ul>${feats.map((f) => `<li>${f}</li>`).join("")}</ul>
     `;
     btn.addEventListener("click", async () => {
       try {
         btn.disabled = true;
         await purchase(plan.id, state.billing);
         refreshSubscriptionUI();
-        toast(`${plan.name} aktif (sandbox)`);
+        toast(t("toast.proActive", { plan: name }));
         if (plan.id !== "free") paywall.close();
       } catch (e) {
-        toast(e.message || "Satın alma başarısız");
+        toast(e.message || t("toast.purchaseFail"));
       } finally {
         btn.disabled = false;
       }
@@ -152,13 +208,14 @@ function openPaywall() {
 
 /* ---------- Onboarding ---------- */
 let onbIndex = 0;
+let onboardingWired = false;
 function setupOnboarding() {
   const root = $("#onboarding");
   const dots = $("#onbDots");
   dots.innerHTML = "";
   for (let i = 0; i < 3; i++) {
     const s = document.createElement("span");
-    if (i === 0) s.classList.add("is-active");
+    if (i === onbIndex) s.classList.add("is-active");
     dots.appendChild(s);
   }
   if (!onboardingDone()) root.hidden = false;
@@ -168,22 +225,25 @@ function setupOnboarding() {
       el.classList.toggle("is-active", i === onbIndex);
     });
     [...dots.children].forEach((d, i) => d.classList.toggle("is-active", i === onbIndex));
-    $("#onbNext").textContent = onbIndex >= 2 ? "Başla" : "Devam";
+    $("#onbNext").textContent = onbIndex >= 2 ? t("onb.start") : t("onb.next");
   }
 
-  $("#onbNext").addEventListener("click", () => {
-    if (onbIndex >= 2) {
+  if (!onboardingWired) {
+    onboardingWired = true;
+    $("#onbNext").addEventListener("click", () => {
+      if (onbIndex >= 2) {
+        setOnboardingDone();
+        root.hidden = true;
+        return;
+      }
+      onbIndex += 1;
+      paint();
+    });
+    $("#onbSkip").addEventListener("click", () => {
       setOnboardingDone();
       root.hidden = true;
-      return;
-    }
-    onbIndex += 1;
-    paint();
-  });
-  $("#onbSkip").addEventListener("click", () => {
-    setOnboardingDone();
-    root.hidden = true;
-  });
+    });
+  }
   paint();
 }
 
@@ -263,7 +323,7 @@ $("#btnSandboxFree").addEventListener("click", () => {
     expiresAt: null,
   });
   refreshSubscriptionUI();
-  toast("Free plana dönüldü");
+  toast(t("toast.freeBack"));
 });
 
 /* ---------- Material selects ---------- */
@@ -311,21 +371,21 @@ function applyPreset(name) {
     $("#thr").value = 0;
     $("#clean").value = 1;
     $("#vecMode").value = "cut";
-    $("#processHint").textContent = "Eskiz · Sauvola adaptif";
+    $("#processHint").textContent = t("hint.sketch");
   } else if (name === "print") {
     $("#adaptive").checked = false;
     $("#blur").value = 0;
     $("#thr").value = 0;
     $("#clean").value = 1;
     $("#vecMode").value = "cut";
-    $("#processHint").textContent = "Şablon · Otsu";
+    $("#processHint").textContent = t("hint.print");
   } else {
     $("#adaptive").checked = false;
     $("#blur").value = 1;
     $("#thr").value = 0;
     $("#clean").value = 0;
     $("#vecMode").value = "centerline";
-    $("#processHint").textContent = "Kenar · Sobel + iskelet";
+    $("#processHint").textContent = t("hint.edge");
   }
   syncLabels();
 }
@@ -344,7 +404,7 @@ async function ingestImage(img) {
   sourceEmpty.hidden = true;
   state.sourceReady = true;
   $("#btnToProcess").disabled = false;
-  studioStatus.textContent = "Kaynak hazır";
+  studioStatus.textContent = t("studio.sourceReady");
   showView("studio");
   showStage("source");
   reprocess();
@@ -375,7 +435,7 @@ async function openCamera() {
     liveVideo.srcObject = mediaStream;
     camDialog.showModal();
   } catch {
-    toast("Kamera yok — galeri kullanın");
+    toast(t("toast.noCamera"));
     $("#fileInput").click();
   }
 }
@@ -438,7 +498,7 @@ function reprocess() {
 function runVectorize() {
   if (!state.binary) reprocess();
   if (!state.binary) return;
-  studioStatus.textContent = "Vektör…";
+  studioStatus.textContent = t("studio.vectorizing");
   syncLabels();
   const mode = $("#vecMode").value;
   const simplify = +$("#simp").value;
@@ -550,16 +610,16 @@ function refreshCam() {
   const el = $("#camMeta");
   if (!job) {
     el.classList.remove("warn");
-    el.innerHTML = "<p>Önce stüdyoda vektör üretin.</p>";
+    el.innerHTML = `<p>${t("cam.waitVector")}</p>`;
     camSvgPreview.innerHTML = "";
     return;
   }
   el.classList.toggle("warn", !job.fits);
   const mat = MATERIALS.find((m) => m.id === materialSel.value)?.label || "";
   el.innerHTML = `<p>
-    Ölçek 1px → ${job.scale.toFixed(4)} mm<br>
-    Parça ${job.widthMm.toFixed(2)} × ${job.heightMm.toFixed(2)} mm<br>
-    Sac ${job.sheetW} × ${job.sheetH} mm ${job.fits ? "· sığar" : "· SIĞMIYOR"}<br>
+    1px → ${job.scale.toFixed(4)} mm<br>
+    ${job.widthMm.toFixed(2)} × ${job.heightMm.toFixed(2)} mm<br>
+    ${job.sheetW} × ${job.sheetH} mm · ${job.fits ? t("cam.fits") : t("cam.overflow")}<br>
     CUT ${job.cutLength.toFixed(0)} mm · ENGRAVE ${job.engraveLength.toFixed(0)} mm<br>
     ${mat} · kerf ${$("#kerfMm").value} mm
   </p>`;
@@ -587,18 +647,18 @@ function refreshExport() {
   const list = $("#exportChecks");
   list.innerHTML = "";
   if (!job) {
-    meta.innerHTML = "<p>Vektör yok.</p>";
+    meta.innerHTML = `<p>${t("export.noVector")}</p>`;
     return;
   }
   const gate = canExport("svg");
-  meta.innerHTML = `<p>CUT ${job.cut.length} · ENGRAVE ${job.engrave.length} · ${job.widthMm.toFixed(1)}×${job.heightMm.toFixed(1)} mm · kalan hak: ${
+  meta.innerHTML = `<p>CUT ${job.cut.length} · ENGRAVE ${job.engrave.length} · ${job.widthMm.toFixed(1)}×${job.heightMm.toFixed(1)} mm · ${
     Number.isFinite(gate.remaining) ? gate.remaining : "∞"
   }</p>`;
   const checks = [
-    { ok: job.cut.length + job.engrave.length > 0, text: "Yol var" },
-    { ok: job.fits, text: job.fits ? "Saca sığıyor" : "Sacdan taşıyor" },
-    { ok: getLimits().dxf, text: getLimits().dxf ? "DXF açık (Pro)" : "DXF kilitli — Pro gerekir" },
-    { ok: gate.ok, text: gate.ok ? "Export kotası uygun" : gate.message },
+    { ok: job.cut.length + job.engrave.length > 0, text: t("export.pathOk") },
+    { ok: job.fits, text: job.fits ? t("export.fitsOk") : t("export.fitsBad") },
+    { ok: getLimits().dxf, text: getLimits().dxf ? t("export.dxfOpen") : t("export.dxfClosed") },
+    { ok: gate.ok, text: gate.ok ? t("export.quotaOk") : gate.message },
   ];
   for (const c of checks) {
     const li = document.createElement("li");
@@ -650,7 +710,7 @@ async function gatedExport(kind, run) {
   await run();
   recordExport();
   refreshSubscriptionUI();
-  toast("İndirme başladı");
+  toast(t("toast.download"));
 }
 
 $("#btnExportSvg").addEventListener("click", () =>
@@ -692,7 +752,7 @@ laserSel.value = "ply3";
 function fillCalcFromJob(toastOnEmpty = true) {
   const job = buildJobState();
   if (!job) {
-    if (toastOnEmpty) toast("Önce stüdyoda vektör / CAM oluşturun");
+    if (toastOnEmpty) toast(t("toast.needVector"));
     return false;
   }
   $("#cPartW").value = job.widthMm.toFixed(2);
@@ -719,7 +779,7 @@ function applyLaserPreset() {
   $("#cPasses").value = p.passes;
   // engrave typically faster
   $("#cEngSpeed").value = Math.max(p.speed * 6, 40);
-  toast(`${p.label} · güç ~%${p.power} (referans)`);
+  toast(`${p.label} · ~${p.power}%`);
   runCalc();
 }
 
@@ -768,20 +828,21 @@ function runCalc() {
 
   const preset = LASER_PRESETS.find((x) => x.id === laserSel.value);
   const host = $("#calcResults");
+  const rot = summary.nest.orientation === "rotated" ? `, ${t("calc.rotated")}` : "";
   host.innerHTML = `
-    <div class="calc-card"><span>Kerf sonrası</span><b>${summary.afterKerf.widthMm.toFixed(2)} × ${summary.afterKerf.heightMm.toFixed(2)} mm</b></div>
-    <div class="calc-card"><span>İnç</span><b>${summary.inch.width.toFixed(3)} × ${summary.inch.height.toFixed(3)} in</b></div>
-    <div class="calc-card"><span>Parça alanı</span><b>${(summary.partAreaMm2 / 100).toFixed(2)} cm²</b></div>
-    <div class="calc-card"><span>Sac doluluk</span><b>%${summary.utilization.toFixed(1)}</b></div>
-    <div class="calc-card"><span>Saca sığan adet</span><b>${summary.nest.count} (${summary.nest.cols}×${summary.nest.rows}${summary.nest.orientation === "rotated" ? ", döndürülmüş" : ""})</b></div>
-    <div class="calc-card"><span>Delme (pierce)</span><b>${summary.pierces}</b></div>
-    <div class="calc-card"><span>Süre / adet</span><b>${formatDuration(summary.time.totalSec)}</b></div>
-    <div class="calc-card"><span>Süre × qty</span><b>${formatDuration(summary.time.totalSec * (+$("#cQty").value || 1))}</b></div>
-    <div class="calc-card"><span>Malzeme</span><b>${summary.material.sheetsNeeded} sac · ${summary.material.totalMaterial.toFixed(0)} ₺</b></div>
-    <div class="calc-card"><span>Makine</span><b>${summary.machineCost.toFixed(0)} ₺</b></div>
-    <div class="calc-card wide"><span>Teklif (marj %${summary.quote.marginPercent})</span><b>Birim ${summary.quote.sellPerUnit.toFixed(0)} ₺ · Toplam ${summary.quote.sellTotal.toFixed(0)} ₺ · Kâr ${summary.quote.profit.toFixed(0)} ₺</b></div>
-    <div class="calc-card wide"><span>Detay süre</span><b>Kesim ${formatDuration(summary.time.cutSec)} · Kazıma ${formatDuration(summary.time.engraveSec)} · Delme ${formatDuration(summary.time.pierceSec)} · Travel ${formatDuration(summary.time.travelSec)}</b></div>
-    <div class="calc-card wide"><span>Referans lazer</span><b>${preset ? `${preset.label} · güç ~%${preset.power} · ${preset.passes} pass` : "—"} ${scaleNote ? "· " + scaleNote : ""}</b></div>
+    <div class="calc-card"><span>${t("calc.r.afterKerf")}</span><b>${summary.afterKerf.widthMm.toFixed(2)} × ${summary.afterKerf.heightMm.toFixed(2)} mm</b></div>
+    <div class="calc-card"><span>${t("calc.r.inch")}</span><b>${summary.inch.width.toFixed(3)} × ${summary.inch.height.toFixed(3)} in</b></div>
+    <div class="calc-card"><span>${t("calc.r.area")}</span><b>${(summary.partAreaMm2 / 100).toFixed(2)} cm²</b></div>
+    <div class="calc-card"><span>${t("calc.r.util")}</span><b>%${summary.utilization.toFixed(1)}</b></div>
+    <div class="calc-card"><span>${t("calc.r.nest")}</span><b>${summary.nest.count} (${summary.nest.cols}×${summary.nest.rows}${rot})</b></div>
+    <div class="calc-card"><span>${t("calc.r.pierce")}</span><b>${summary.pierces}</b></div>
+    <div class="calc-card"><span>${t("calc.r.time")}</span><b>${formatDurationI18n(summary.time.totalSec)}</b></div>
+    <div class="calc-card"><span>${t("calc.r.timeQty")}</span><b>${formatDurationI18n(summary.time.totalSec * (+$("#cQty").value || 1))}</b></div>
+    <div class="calc-card"><span>${t("calc.r.material")}</span><b>${summary.material.sheetsNeeded} ${t("calc.sheets")} · ${summary.material.totalMaterial.toFixed(0)}</b></div>
+    <div class="calc-card"><span>${t("calc.r.machine")}</span><b>${summary.machineCost.toFixed(0)}</b></div>
+    <div class="calc-card wide"><span>${t("calc.r.quote", { pct: summary.quote.marginPercent })}</span><b>${t("calc.unit")} ${summary.quote.sellPerUnit.toFixed(0)} · ${t("calc.total")} ${summary.quote.sellTotal.toFixed(0)} · ${t("calc.profit")} ${summary.quote.profit.toFixed(0)}</b></div>
+    <div class="calc-card wide"><span>${t("calc.r.timeDetail")}</span><b>${t("calc.cut")} ${formatDurationI18n(summary.time.cutSec)} · ${t("calc.engrave")} ${formatDurationI18n(summary.time.engraveSec)} · ${t("calc.r.pierce")} ${formatDurationI18n(summary.time.pierceSec)} · ${t("calc.travelLabel")} ${formatDurationI18n(summary.time.travelSec)}</b></div>
+    <div class="calc-card wide"><span>${t("calc.r.laser")}</span><b>${preset ? `${preset.label} · ~${preset.power}% · ${preset.passes}×` : "—"} ${scaleNote ? "· " + scaleNote : ""}</b></div>
   `;
 }
 
@@ -797,13 +858,13 @@ function pushCalcToCam() {
   if (match) sheetSel.value = match.id;
   refreshCam();
   showView("cam");
-  toast("Ölçüm CAM’e aktarıldı");
+  toast(t("toast.sentCam"));
 }
 
 $("#btnCalcFromJob").addEventListener("click", () => {
   if (fillCalcFromJob(true)) {
     runCalc();
-    toast("CAM verileri yüklendi");
+    toast(t("toast.filledCam"));
   }
 });
 $("#btnCalcPreset").addEventListener("click", applyLaserPreset);
@@ -898,13 +959,26 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 /* boot */
+initI18n();
+fillLangSelects();
+$("#langSelect")?.addEventListener("change", (e) => refreshLanguage(e.target.value));
+$("#langSelectAccount")?.addEventListener("change", (e) => refreshLanguage(e.target.value));
+
 setupOnboarding();
 applyPreset("sketch");
 syncLabels();
 refreshSubscriptionUI();
+applyI18n();
+document.querySelectorAll("option[data-i18n]").forEach((el) => {
+  el.textContent = t(el.getAttribute("data-i18n"));
+});
 
 if (new URLSearchParams(location.search).has("demo")) {
   setOnboardingDone();
   $("#onboarding").hidden = true;
   seedDemo();
 }
+
+// URL ?lang=de support
+const langQ = new URLSearchParams(location.search).get("lang");
+if (langQ) refreshLanguage(langQ);
